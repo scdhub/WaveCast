@@ -56,10 +56,10 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
-flutter_icons:
-  android: true
-  ios: true
-  image_path: "assets/assets_icon_image/CanvasEP_02.png" # 自作アイコンのパス
+#flutter_icons:
+#  android: true
+#  ios: true
+#  image_path: "assets/assets_icon_image/CanvasEP_02.png" # 自作アイコンのパス
 
 
   # The "flutter_lints" package below contains a set of recommended lints to
@@ -78,6 +78,8 @@ flutter:
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
+
+#  これ取ると、アイコンが表示されない
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
@@ -112,6 +114,9 @@ flutter:
       - asset: fonts/NotoSansJp-Bold.ttf #FontWeight.w700
       - asset: fonts/NotoSansJp-ExtraBold.ttf #FontWeight.w800
       - asset: fonts/NotoSansJp-Black.ttf #FontWeight.w900
+
+#スプラッシュ画面のデザイン
+#flutter_native_splash:
 
 
   #   - family: Schyler
