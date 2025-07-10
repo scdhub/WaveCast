@@ -38,7 +38,7 @@ class _TextToPageState extends State<TextToPage> {
       child: ElevatedButton(
         style: TextButton.styleFrom(
           // foregroundColor: Colors.white,
-          backgroundColor: const Color(0xFF9575CD),
+          backgroundColor: const Color(0xFF275315),
           side: const BorderSide(
             color: Colors.white,
             width: 2,//4

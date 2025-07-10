@@ -73,7 +73,7 @@ class _BlueToothConnectToPageState extends State<BlueToothConnectToPage> {
       height: 70,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF304FFE),
+          backgroundColor: const Color(0xFF26CC76),
           side: const BorderSide(color: Colors.white, width: 2,
           ),
           //ボタンの形状設定。角を丸めた長方形。

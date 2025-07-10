@@ -16,7 +16,7 @@ class TopSelectPicturePage extends StatelessWidget {
       height: 70,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor:  const Color(0xFF2962FF),
+          backgroundColor:  const Color(0xFF16A362),
           side: const BorderSide(color: Colors.white, width: 2),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),

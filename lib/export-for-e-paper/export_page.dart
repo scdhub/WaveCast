@@ -28,6 +28,7 @@ class _ExportPageState extends State<ExportPage> {
   var processRate = 0.5;
   E_paperInfo e_paperInfo;
 
+
   //信頼済みデバイスデータ格納List
   List<TrustDevice> trustDevices = [];
 
@@ -61,26 +62,27 @@ class _ExportPageState extends State<ExportPage> {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 Padding(
-                    padding: const EdgeInsets.fromLTRB(0, 5, 0, 5),
-                    child: Container(
-                        alignment: Alignment.center,
-                        width: MediaQuery.of(context).size.width,
-                        color: const Color(0xFF1A237E),
-                        child: const Text('接続 E-paper 情報',
-                            style: TextStyle(
-                              fontSize: 20,
-                              color: Colors.white,
-                            ),
-                        ),
+                  padding: const EdgeInsets.fromLTRB(0, 5, 0, 5),
+                  child: Container(
+                    alignment: Alignment.center,
+                    width: MediaQuery.of(context).size.width,
+                    color: const Color(0xFF06602F),
+                    child: const Text(
+                      '接続 E-paper 情報',
+                      style: TextStyle(
+                        fontSize: 20,
+                        color: Colors.white,
+                      ),
                     ),
+                  ),
                 ),
                 Container(
                   width: MediaQuery.of(context).size.width,
                   decoration: BoxDecoration(
                       border: Border.all(
-                        color: Colors.black12,
-                        width: 2,
-                      )),
+                    color: Colors.black12,
+                    width: 2,
+                  )),
                   child: Column(children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -95,7 +97,7 @@ class _ExportPageState extends State<ExportPage> {
                           //     ? '不明'
                           widget.trustName,
                           style: const TextStyle(
-                            fontSize: 18,//20
+                            fontSize: 18, //20
                           ),
                         )
                       ],
@@ -120,7 +122,7 @@ class _ExportPageState extends State<ExportPage> {
                     child: Container(
                         alignment: Alignment.center,
                         width: MediaQuery.of(context).size.width,
-                        color: const Color(0xFF1A237E),
+                        color: const Color(0xFF06602F),
                         child: const Text('E-paper規格情報',
                             style: TextStyle(
                               fontSize: 20,
@@ -130,9 +132,9 @@ class _ExportPageState extends State<ExportPage> {
                   width: MediaQuery.of(context).size.width,
                   decoration: BoxDecoration(
                       border: Border.all(
-                        color: Colors.black12,
-                        width: 2,
-                      )),
+                    color: Colors.black12,
+                    width: 2,
+                  )),
                   child: Column(children: [
                     Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -175,19 +177,18 @@ class _ExportPageState extends State<ExportPage> {
                   ]),
                 ),
                 Padding(
-                    padding: const EdgeInsets.fromLTRB(0, 5, 0, 5),
-                    child: Container(
-                        alignment: Alignment.center,
-                        width: MediaQuery.of(context).size.width,
-                        color: const Color(0xFF512DA8),
-                        child: const Text('E-paperへの画像配信/画像削除',
-                            //'E-paper配信用画像の表示',
-                            style: TextStyle(
-                              fontSize: 20,
-                              color: Colors.white,
-                            )
-                        ),
-                    ),
+                  padding: const EdgeInsets.fromLTRB(0, 5, 0, 5),
+                  child: Container(
+                    alignment: Alignment.center,
+                    width: MediaQuery.of(context).size.width,
+                    color: const Color(0xFF06602F),
+                    child: const Text('E-paperへの画像配信/画像削除',
+                        //'E-paper配信用画像の表示',
+                        style: TextStyle(
+                          fontSize: 20,
+                          color: Colors.white,
+                        )),
+                  ),
                 ),
                 Container(
                   // color:Colors.white,
@@ -195,31 +196,34 @@ class _ExportPageState extends State<ExportPage> {
                   height: 80,
                   decoration: BoxDecoration(
                       border: Border.all(
-                        color: Colors.black12,
-                        width: 2,
-                      )),
+                    color: Colors.black12,
+                    width: 2,
+                  )),
                   child:
-                  // Column(children:[
-                  Padding(
+                      // Column(children:[
+                      Padding(
                     // padding: const EdgeInsets.fromLTRB(0, 15, 0, 15),
                     padding: const EdgeInsets.fromLTRB(15, 10, 10, 15),
                     child: ElevatedButton.icon(
                       onPressed: () {
+                        debugPrint("▶ ExportPage ： SendPictureSelect : trustName=${widget.trustName}, IP=${widget.trustDevice}");
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => SendPictureSelect(
-                              deviceInfo: widget.trustDevice,
-                              trustName: widget.trustName,
-                            )),
+                              builder: (context) => SendPictureSelect(
+                                    //IP名
+                                    deviceInfo: widget.trustDevice,
+                                    //デバイスのID
+                                    trustName: widget.trustName, trustDevice: widget.trustDevice,
+                                  )),
                         );
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Color(0xFF2962FF),
+                        backgroundColor: Color(0xFF06602F),
                         elevation: 10,
                         side: const BorderSide(
                           color: Colors.white,
-                          // color: Colors.transparent,　
+                          // color: Colors.transparent,
                           width: 2,
                         ),
                         shape: RoundedRectangleBorder(
@@ -247,10 +251,10 @@ class _ExportPageState extends State<ExportPage> {
                     child: Container(
                         alignment: Alignment.center,
                         width: MediaQuery.of(context).size.width,
-                        color: const Color(0xFF512DA8),
+                        color: const Color(0xFF06602F),
                         // child: const Text('デバイスの接続を解除',
                         child: const Text('登録デバイスを削除',
-                          //このデバイスの登録を解除',
+                            //このデバイスの登録を解除',
                             style: TextStyle(
                               fontSize: 20,
                               color: Colors.white,
@@ -260,19 +264,19 @@ class _ExportPageState extends State<ExportPage> {
                   width: MediaQuery.of(context).size.width,
                   decoration: BoxDecoration(
                       border: Border.all(
-                        color: Colors.black12,
-                        width: 2,
-                      )),
+                    color: Colors.black12,
+                    width: 2,
+                  )),
                   height: 80,
                   child:
-                  // Column(children:[
-                  Padding(
+                      // Column(children:[
+                      Padding(
                     padding: const EdgeInsets.fromLTRB(15, 10, 10, 15),
                     child: ElevatedButton.icon(
                       onPressed: () {
                         showDialog(
                           barrierDismissible:
-                          false, //dialog以外の部分をタップしても消えないようにする。
+                              false, //dialog以外の部分をタップしても消えないようにする。
                           context: context,
                           builder: (context) =>
                               DeviceUnLockPop(onDelete: widget.onDelete),
@@ -291,7 +295,7 @@ class _ExportPageState extends State<ExportPage> {
                       ),
                       icon: const Icon(
                         // Icons.bluetooth_disabled, // Bluetooth接続解除アイコン
-                        Icons.phonelink_erase,  //  登録デバイス解除
+                        Icons.phonelink_erase, //  登録デバイス解除
                         color: Colors.white,
                       ),
                       label: const Text(
@@ -333,15 +337,15 @@ class DeviceUnLockPop extends StatelessWidget {
           //   AlertDialog(
           title: Text(
             "確認",
-            style: AppTheme.dialogTitleStyle,//theme.dartのスタイルを使用
+            style: AppTheme.dialogTitleStyle, //theme.dartのスタイルを使用
             textAlign: TextAlign.center,
           ),
-
           content: Column(
               mainAxisSize: MainAxisSize.min, //サイズ調節
               children: [
-                Text('登録を解除しますか？',
-                  style: AppTheme.dialogContentStyle,//theme.dartのスタイルを使用
+                Text(
+                  '登録を解除しますか？',
+                  style: AppTheme.dialogContentStyle, //theme.dartのスタイルを使用
                   textAlign: TextAlign.center,
                 ),
 
@@ -350,7 +354,7 @@ class DeviceUnLockPop extends StatelessWidget {
                 //       // fontWeight: FontWeight.bold,
                 //     )),
                 // content:
-                const SizedBox(height:16),
+                const SizedBox(height: 16),
                 Wrap(
                   spacing: 10, // ボタン間の間隔
                   runSpacing: 10, // 折り返した際の間隔
@@ -359,7 +363,8 @@ class DeviceUnLockPop extends StatelessWidget {
                     SizedBox(
                       width: 100, // ボタンの横幅を制限
                       child: ElevatedButton(
-                        style:AppTheme.dialogYesButtonStyle,//theme.dartのスタイルを使用
+                        style:
+                            AppTheme.dialogYesButtonStyle, //theme.dartのスタイルを使用
                         // ElevatedButton.styleFrom(
                         //   backgroundColor: const Color(0xFFFFA7A7), // ピンク
                         //   shape: RoundedRectangleBorder(
@@ -367,9 +372,11 @@ class DeviceUnLockPop extends StatelessWidget {
                         //   ),
                         // ),
                         onPressed: () async {
-                          onDelete();
-                          Navigator.pop(context);
-                          Navigator.pop(context);
+                          Navigator.of(context).pop(); // まずダイアログを閉じる
+                          onDelete(); //閉じたあとで削除コールバックを呼び出す
+                          // onDelete();
+                          // Navigator.pop(context);
+                          // Navigator.pop(context);
                         },
                         child: const Text(
                           "はい",
@@ -381,7 +388,8 @@ class DeviceUnLockPop extends StatelessWidget {
                     SizedBox(
                       width: 100,
                       child: ElevatedButton(
-                        style: AppTheme.dialogNoButtonStyle, //theme.dartのスタイルを使用
+                        style:
+                            AppTheme.dialogNoButtonStyle, //theme.dartのスタイルを使用
                         // ElevatedButton.styleFrom(
                         //   backgroundColor: const Color(0xFFB0C4DE), // ふんわりしたブルー
                         //   shape: RoundedRectangleBorder(
@@ -392,17 +400,14 @@ class DeviceUnLockPop extends StatelessWidget {
                         child: const Text(
                           "いいえ",
                           style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold),
+                              color: Colors.white, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
-              ]
-          )
-      ),
+              ])),
     );
   }
 }

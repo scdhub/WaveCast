@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 // import 'package:google_fonts/google_fonts.dart';
 import 'package:iphone_bt_epaper/top_page/top_text-to-page.dart';
 // import '../app_body_color.dart';
+import '../theme.dart';
 import 'top_bt-connect-to-page.dart';
 import 'top_drawing-to-page.dart';
 // import 'top_import-type-select-to-popup.dart';
@@ -22,22 +23,22 @@ class _TopPageState extends State<TopPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
+        title: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'CanvasEP',
+            Text(
+              'WaveCast',
               style: TextStyle(
-                color: Color(0xFF84848F),
+                color: AppTheme.appBarTextColor,
                 fontSize: 40,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(width: 8), // テキストとアイコンの間隔
-            Image.asset(
-              'assets/assets_CanvasEP_image/CanvasEP_01.png',
-              height: 45, // アイコンサイズはお好みで
-            ),
+            SizedBox(width: 8), // テキストとアイコンの間隔
+            // Image.asset(
+            //   'assets/assets_CanvasEP_image/CanvasEP_01.png',
+            //   height: 45, // アイコンサイズはお好みで
+            // ),
           ],
         ),
         backgroundColor: Colors.white,

@@ -14,7 +14,7 @@ class TopTakeAPicturePage extends StatelessWidget {
       height: 70,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF1E88E5),
+          backgroundColor: const Color(0xFF25804C),
           side: const BorderSide(color: Colors.white, width: 2),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
