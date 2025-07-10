@@ -1,3 +1,5 @@
+//選択した画像をpng形式に保存し、そのpng画像をサーバへ出力する処理
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -44,7 +46,7 @@ class _SelectCheckState extends State<SelectCheck> {
     }
     // path = widget.imageData[0]; //前画面から渡された画像の最初の写真をよみとる
     //渡されたデータを.pngファイル形式にする
-    saveImages();
+    saveJpegImages();
   }
 
 
@@ -56,30 +58,47 @@ class _SelectCheckState extends State<SelectCheck> {
     });
   }
 
-  // void changeImage(Uint8List selectedImage) {
-  //   setState(() {
-  //     path = selectedImage; //cropImage(pathN);
-  //   });
-  // }
-
-  // void changeIawait 遷移mage(Uint8List pathN) {
-  //   setState(() {
-  //     path = pathN;
-  //   });
-  // }
-
-  // **画像を `.png` にして保存**
-  Future<void> saveImages() async {
+  // Jpeg形式に中身を変換後保存する処理
+  // 保存+ファイル名を「.jpeg」にして保存している
+  Future<void> saveJpegImages() async {
+    // 保存先のディレクトリを取得する（アプリ側の内部ストレージ）
     final directory = await getApplicationDocumentsDirectory();
     for (int i = 0; i < widget.imageData.length; i++) {
       final Uint8List? data = widget.imageData[i];
+
+      if (data != null) {
+        // 先頭10バイトだけ抜き出す
+        final headerBytes = data.sublist(0, 10);
+        print('画像データ先頭バイト: $headerBytes');
+
+        // 画像形式の判別例
+        //　jpegファイルの最初にある識別子（マジックナンバー）を羅列
+        if (headerBytes.length >= 8 &&
+            headerBytes[0] == 137 &&
+            headerBytes[1] == 80 &&
+            headerBytes[2] == 78 &&
+            headerBytes[3] == 71) {
+          print('！！！！！！！！！！！！！！PNG画像');
+        } else if (headerBytes.length >= 3 &&
+            headerBytes[0] == 255 &&
+            headerBytes[1] == 216 &&
+            headerBytes[2] == 255) {
+          print('！！！！！！！！！！！！！！JPEG画像です');
+        } else {
+          print('不明な画像フォーマットです');
+        }
+      }
+
+      // ファイル名（.jpeg）の保存
       if (data != null) {
         // Uint8List processedData = cropImage(data);
         Uint8List processedData = data; // トリミングせずにそのまま保存
-        final String fileName = 'image_$i.png';
+        final String fileName = 'image_$i.jpeg';
+        // final String fileName = 'image_$i.png';
         final path = '${directory.path}/$fileName';
         final file = File(path);
         await file.writeAsBytes(processedData);
+        // filesリストに追加
         files.add(file);
 
         // 画像解像度確認

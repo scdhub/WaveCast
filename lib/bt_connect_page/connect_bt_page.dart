@@ -45,7 +45,7 @@ class _ConnectBTPageState extends State<ConnectBTPage> {
       'item',
       value
           .map((device) =>
-      '${device.trustName}::${device.trustIpAddress}::${device.devicesData}')
+              '${device.trustName}::${device.trustIpAddress}::${device.devicesData}')
           .toList(),
     );
   }
@@ -74,8 +74,7 @@ class _ConnectBTPageState extends State<ConnectBTPage> {
           trustIpAddress: parts[1],
           devicesData: device,
         );
-      })
-          .toList();
+      }).toList();
     });
   }
 
@@ -91,8 +90,7 @@ class _ConnectBTPageState extends State<ConnectBTPage> {
           'item',
           trustDevices
               .map((device) =>
-          '${device.trustName}::${device.trustIpAddress}::${device
-              .devicesData}')
+                  '${device.trustName}::${device.trustIpAddress}::${device.devicesData}')
               .toList());
     });
   }
@@ -137,13 +135,11 @@ class _ConnectBTPageState extends State<ConnectBTPage> {
 
       // スキャン結果を反映
       scanDevices = devicesList
-          .map((device) =>
-          ScanDevice(
+          .map((device) => ScanDevice(
               scanName: device.platformName,
               scanIpAddress: device.remoteId.toString(),
               scanDevicesData: device))
-          .where((device) =>
-          device.scanName.isNotEmpty) // デバイス名が空のものを除外する。　
+          .where((device) => device.scanName.isNotEmpty) // デバイス名が空のものを除外する。
           // ↓　追加するときは　　↑　isnotempty　の「 ）」を削除して追加してください。
           // && device.scanName.startsWith("wd001_ble_")) //  「wd001_ble_」 のみ取得する。
           .toList();
@@ -219,11 +215,10 @@ class _ConnectBTPageState extends State<ConnectBTPage> {
           //画面上に表示される
           'E-paperに配信',
           style: TextStyle(
-            // fontSize: 17,
-          ),
+              // fontSize: 17,
+              ),
         ),
       ),
-
       body: CustomPaint(
         painter: BackgroundPainter(),
         // painter: HexagonPainter(),
@@ -234,8 +229,8 @@ class _ConnectBTPageState extends State<ConnectBTPage> {
               child: ElevatedButton(
                 //スキャン開始or停止ボタン
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isScanning ? Color(0xFFD81B60) : Color(
-                      0xFF1565C0),
+                  backgroundColor:
+                      isScanning ? Color(0xFFD81B60) : Color(0xFF0D7BAA),
                   elevation: 5,
                   // elevation: 10,
                   //境界線の幅を設定。
@@ -261,11 +256,16 @@ class _ConnectBTPageState extends State<ConnectBTPage> {
                 },
                 child: SizedBox(
                   width: 160,
-
                   child: Row(children: [
                     isScanning
-                        ? const Icon(Icons.stop_circle, color: Colors.white,)
-                        : const Icon(Icons.restart_alt, color: Colors.white,),
+                        ? const Icon(
+                            Icons.stop_circle,
+                            color: Colors.white,
+                          )
+                        : const Icon(
+                            Icons.restart_alt,
+                            color: Colors.white,
+                          ),
                     const SizedBox(width: 10),
                     Text(isScanning ? 'スキャン停止' : 'スキャン開始',
                         style: const TextStyle(
@@ -277,31 +277,25 @@ class _ConnectBTPageState extends State<ConnectBTPage> {
               ),
             ),
             //テキストをスキャンボタンの下に配置
-            Container(
-              color: Colors.white,
-              alignment: Alignment.center,
-              width: MediaQuery
-                  .of(context)
-                  .size
-                  .width,
-              height: 25,
-              child: const Text(
-                '※配信を行うにはデバイス登録後、右アイコンを押下ください。',
-                // 'スキャンを開始して、デバイスを登録してください。',
-                style: TextStyle(color: Colors.red,
-                  fontSize: 12, fontWeight:
-                  FontWeight.bold, // 太字にして強調
-                ),
-              ),
-            ),
+            // Container(
+            //   color: Colors.white,
+            //   alignment: Alignment.center,
+            //   width: MediaQuery.of(context).size.width,
+            //   height: 25,
+            //   child: const Text(
+            //     '※配信を行うにはデバイス登録後、右アイコンを押下ください。',
+            //     // 'スキャンを開始して、デバイスを登録してください。',
+            //     style: TextStyle(
+            //       color: Colors.red,
+            //       fontSize: 12, fontWeight: FontWeight.bold, // 太字にして強調
+            //     ),
+            //   ),
+            // ),
 
             Container(
               alignment: Alignment.center,
-              width: MediaQuery
-                  .of(context)
-                  .size
-                  .width,
-              color: Color(0xFF1565C0),
+              width: MediaQuery.of(context).size.width,
+              color: Color(0xFF0D7BAA),
               child: const Text('登録済みデバイス',
                   style: TextStyle(
                     fontSize: 20,
@@ -318,99 +312,118 @@ class _ConnectBTPageState extends State<ConnectBTPage> {
                 itemBuilder: (context, index) {
                   // デバイス名が空なら非表示にする
                   // if (trustDevices[index].trustName.isEmpty) {
-                  if (trustDevices[index].trustName
-                      .trim()
-                      .isEmpty) {
+                  if (trustDevices[index].trustName.trim().isEmpty) {
                     return const SizedBox.shrink(); // 何も表示しない
                   }
 
-                  return Container(
-                    height: 50,
-                    margin: const EdgeInsets.all(5),
-                    alignment: Alignment.center,
-                    // width: double.infinity,
-                    width: MediaQuery.of(context).size.width,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.rectangle, //長方形
-                      border: Border.all(
-                        color: Colors.black12,
-                        width: 2,
+                  return InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ExportPage(
+                            trustName: trustDevices[index].trustName,
+                            trustIpAddress: trustDevices[index].trustIpAddress,
+                            trustDevice: trustDevices[index].devicesData,
+                            onDelete: () => _removeCounterValue(index),
+                          ),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      height: 50,
+                      margin: const EdgeInsets.all(5),
+                      alignment: Alignment.center,
+                      // width: double.infinity,
+                      width: MediaQuery.of(context).size.width,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.rectangle, //長方形
+                        border: Border.all(
+                          color: Colors.black12,
+                          width: 2,
+                        ),
+                        borderRadius: BorderRadius.circular(15),
                       ),
-                      borderRadius: BorderRadius.circular(15),
-                      // boxShadow: const [
-                      //   BoxShadow(
-                      //     offset: Offset(0, 5),
-                      //     color: Colors.grey,
-                      //   ),
-                      // ],
-                    ),
 
-                    child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // 左側にデバイスアイコンを追加
-                          const Padding(
-                            padding: EdgeInsets.only(left: 10),
-                            child: Icon(
-                              Icons.perm_device_info_sharp,
-                              size: 25,
-                              color: Colors.grey,
+                      child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // 左側にデバイスアイコンを追加
+                            const Padding(
+                              padding: EdgeInsets.only(left: 10),
+                              child: Icon(
+                                Icons.perm_device_info_sharp,
+                                size: 25,
+                                color: Colors.grey,
+                              ),
                             ),
-                          ),
-                          // const SizedBox(
-                          //   width: 50,
-                          // ),
 
-                          //デバイスリスト
-                          Expanded(
-                            child: Column(
-                                children: [
-                                  Text(
-                                    trustDevices[index].trustName,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black),
-                                    // trustDevices[index].trustName.isEmpty
-                                    //     ? 'デバイス名　不明'
-                                    //     : trustDevices[index].trustName,
-                                    // style: const TextStyle(
-                                    //     fontWeight: FontWeight.bold,color: Colors.black),
-                                  ),
-                                  Text(
-                                    trustDevices[index].trustIpAddress,
-                                    style: const TextStyle(
+                            //デバイスリスト
+                            Expanded(
+                              child: Column(children: [
+                                Text(
+                                  trustDevices[index].trustName,
+                                  style: const TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.grey,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ]),
-                          ),
-                          IconButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  // 選択したデバイス名の情報を配信確認画面に渡す。
-                                  builder: (context) =>
-                                      ExportPage(
-                                        trustName: trustDevices[index]
-                                            .trustName,
-                                        trustIpAddress:
-                                        trustDevices[index].trustIpAddress,
-                                        trustDevice:
-                                        trustDevices[index].devicesData,
-                                        onDelete: () =>
-                                            _removeCounterValue(index),
-                                      ),
+                                      color: Colors.black),
+                                  // trustDevices[index].trustName.isEmpty
+                                  //     ? 'デバイス名　不明'
+                                  //     : trustDevices[index].trustName,
+                                  // style: const TextStyle(
+                                  //     fontWeight: FontWeight.bold,color: Colors.black),
                                 ),
-                              );
-                            },
-                            icon: const Icon(Icons.info_outline_rounded,color: Color(0xFFE57373),size: 28,),
-                          ),
-                        ]),
-                    // ),
+                                Text(
+                                  trustDevices[index].trustIpAddress,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ]),
+                            ),
+                            // IconButton(
+                            //   onPressed: () {
+                            //     // debugPrint("★ ConnectBTPage　： ExportPage : trustName=${trustDevices[index].trustName}, "
+                            //     //     "IP=${trustDevices[index].devicesData}");
+                            //     Navigator.push(
+                            //       context,
+                            //       MaterialPageRoute(
+                            //         // 選択したデバイス名の情報を配信確認画面に渡す。
+                            //         builder: (context) =>
+                            //             ExportPage(
+                            //               trustName: trustDevices[index]
+                            //                   .trustName,
+                            //               trustIpAddress:
+                            //               trustDevices[index].trustIpAddress,
+                            //               trustDevice:
+                            //               trustDevices[index].devicesData,
+                            //               onDelete: () =>
+                            //                   _removeCounterValue(index),
+                            //             ),
+                            //       ),
+                            //     );
+                            //   },
+
+                            //　アイコンを透明化し、spacebetweenを使って位置を調節
+                            Visibility(
+                              visible: false, // false にすると中身は非表示に
+                              maintainSize: true, // レイアウト上のサイズは維持
+                              maintainAnimation:
+                                  true, // アニメーションも維持（必要なければ false OK）
+                              maintainState: true, // 状態も維持（必要なければ false OK）
+                              child: IconButton(
+                                onPressed: () {},
+                                icon: const Icon(
+                                  Icons.info_outline_rounded,
+                                  color: Color(0xFFE57373),
+                                  size: 28,
+                                ),
+                              ),
+                            ),
+                          ]),
+                    ),
                   );
                 },
               ),
@@ -420,11 +433,8 @@ class _ConnectBTPageState extends State<ConnectBTPage> {
             //未登録デバイスのラベル
             Container(
               alignment: Alignment.center,
-              width: MediaQuery
-                  .of(context)
-                  .size
-                  .width,
-              color: Color(0xFF1565C0),
+              width: MediaQuery.of(context).size.width,
+              color: Color(0xFF0D7BAA),
               child: const Text(
                 style: TextStyle(
                   fontSize: 20,
