@@ -14,11 +14,10 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 
-
 class SelectCheck extends StatefulWidget {
   final List<Uint8List?> imageData;
 
-const SelectCheck({Key? key, required this.imageData}) : super(key: key);
+  const SelectCheck({Key? key, required this.imageData}) : super(key: key);
 
 // class SelectCheck extends StatefulWidget {
 //   final List<Uint8List?> imageData;
@@ -34,7 +33,7 @@ class _SelectCheckState extends State<SelectCheck> {
   final List<File> files = [];
   // final ScrollController _scrollController = ScrollController(); // 横スクロール用コントローラー
   List<Uint8List?> selectedImages = []; // 複数選択を管理するリスト
-  int count = 1;  //png形式に変換する為にファイルとして、画像を保存する必要がある
+  int count = 1; //png形式に変換する為にファイルとして、画像を保存する必要がある
   // final List<File> files = [];
 
   // 最初の画像を選択状態にする
@@ -48,7 +47,6 @@ class _SelectCheckState extends State<SelectCheck> {
     //渡されたデータを.pngファイル形式にする
     saveJpegImages();
   }
-
 
   //選択した画像に変更する
   //複数選択にて、左右アイコンをタップすると数秒画像が消えるため、スクロール処理完了後にパスを更新
@@ -105,7 +103,8 @@ class _SelectCheckState extends State<SelectCheck> {
         Uint8List imageData = await file.readAsBytes();
         img.Image? image = img.decodeImage(imageData);
         if (image != null) {
-          debugPrint('File before upload: ${file.path} -> Width: ${image.width}, Height: ${image.height}');
+          debugPrint(
+              'File before upload: ${file.path} -> Width: ${image.width}, Height: ${image.height}');
         } else {
           debugPrint('File before upload: ${file.path} -> 画像をデコードできませんでした');
         }
@@ -120,8 +119,8 @@ class _SelectCheckState extends State<SelectCheck> {
     debugPrint("status.isGranted: ${status.isGranted}");
     if (!status.isGranted) {
       // 権限が許可されていない場合、リクエストする
-      PermissionStatus permissionStatus = await Permission.locationWhenInUse
-          .request();
+      PermissionStatus permissionStatus =
+          await Permission.locationWhenInUse.request();
       debugPrint("permissionStatus.isGranted: ${permissionStatus.isGranted}");
       debugPrint("permissionStatus.isDenied: ${permissionStatus.isDenied}");
 
@@ -148,7 +147,7 @@ class _SelectCheckState extends State<SelectCheck> {
     }
   }
 
-  // // ダイアログを表示　
+  // // ダイアログを表示
   void uploadMessage() {
     showDialog(
       barrierDismissible: false,
@@ -168,11 +167,12 @@ class _SelectCheckState extends State<SelectCheck> {
                 child: _isWriting
                     ? const SizedBox() // 画像登録中はタイトルを表示しない
                     : Text(
-                  '登録完了',
-                  style: AppTheme.dialogTitleStyle, // タイトルのスタイル
-                ),
+                        '登録完了',
+                        style: AppTheme.dialogTitleStyle, // タイトルのスタイル
+                      ),
               ),
-              content: Padding( // 余白の調整
+              content: Padding(
+                // 余白の調整
                 padding: const EdgeInsets.all(16.0), // ダイアログ内の余白
                 child: SizedBox(
                   width: 250, // 幅を調整
@@ -181,14 +181,17 @@ class _SelectCheckState extends State<SelectCheck> {
                     children: [
                       //動作
                       if (_isWriting)
-                        AppTheme.customCircularProgressIndicator(), // 画像登録中にインジケーター表示
+                        AppTheme
+                            .customCircularProgressIndicator(), // 画像登録中にインジケーター表示
                       if (!_isWriting)
                         Text(
                           'BTスキャン＆E-paper配信関連に移りますか？',
                           style: AppTheme.dialogContentStyle, // 本文のスタイル
                         ),
 
-                      const SizedBox(height: 20,),
+                      const SizedBox(
+                        height: 20,
+                      ),
 
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -203,14 +206,14 @@ class _SelectCheckState extends State<SelectCheck> {
                                 onPressed: _isWriting
                                     ? null // 画像登録中は無効
                                     : () async {
-                                  await requestLocationPermission();
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (
-                                          context) => const ConnectBTPage(),
-                                    ),
-                                  );
-                                },
+                                        await requestLocationPermission();
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                const ConnectBTPage(),
+                                          ),
+                                        );
+                                      },
                                 child: const Text('はい',
                                     style: TextStyle(
                                         fontWeight: FontWeight.bold,
@@ -228,11 +231,13 @@ class _SelectCheckState extends State<SelectCheck> {
                                 onPressed: _isWriting
                                     ? null // 画像登録中は無効
                                     : () {
-                                  Navigator.of(context).pop(); // ダイアログを閉じる
-                                },
-                                child: const Text('いいえ',
-                                    // style: TextStyle(color: Colors.white,
-                                    //     fontWeight: FontWeight.bold)
+                                        Navigator.of(context)
+                                            .pop(); // ダイアログを閉じる
+                                      },
+                                child: const Text(
+                                  'いいえ',
+                                  // style: TextStyle(color: Colors.white,
+                                  //     fontWeight: FontWeight.bold)
                                 ),
                               ),
                             ),
@@ -252,7 +257,6 @@ class _SelectCheckState extends State<SelectCheck> {
 
 // `StatefulBuilder` の `setState` を保存するためのグローバル変数
   late StateSetter updateDialogState;
-
 
 // 画像アップロード処理を非同期で行う
   Future<void> _showWriteDialog() async {
@@ -275,7 +279,6 @@ class _SelectCheckState extends State<SelectCheck> {
       // // ダイアログの状態が切り替わるように更新
       // Navigator.of(context).pop(); // ダイアログを閉じる
       // uploadMessage(); // 完了ダイアログを表示（ダイアログは1回のみ）
-
     } catch (e) {
       setState(() {
         _isWriting = false; // アップロード失敗
@@ -284,8 +287,6 @@ class _SelectCheckState extends State<SelectCheck> {
       missUploadMessage(); // アップロード失敗メッセージを表示
     }
   }
-
-
 
 // // 画像アップロード処理を非同期で行う
 //   //ここで二つ出てしまっている・・・
@@ -330,7 +331,8 @@ class _SelectCheckState extends State<SelectCheck> {
             contentTextStyle: AppTheme.errorContentStyle,
             // エラーダイアログの本文スタイル
             actionsAlignment: MainAxisAlignment.center,
-            title: const Text('登録エラー',
+            title: const Text(
+              '登録エラー',
               textAlign: TextAlign.center,
             ),
             content: const Text(
@@ -344,21 +346,21 @@ class _SelectCheckState extends State<SelectCheck> {
               _isWriting
                   ? AppTheme.customCircularProgressIndicator()
                   : Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ElevatedButton(
-                    style: AppTheme.errordialogButtonStyle, // エラーダイアログボタンスタイル
-                    // TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                    child: const Text('OK'),
-                  ),
-                ],
-              ),
-            ]
-        );
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ElevatedButton(
+                          style: AppTheme
+                              .errordialogButtonStyle, // エラーダイアログボタンスタイル
+                          // TextButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                          },
+                          child: const Text('OK'),
+                        ),
+                      ],
+                    ),
+            ]);
       },
     );
   }
@@ -384,7 +386,6 @@ class _SelectCheckState extends State<SelectCheck> {
 
   //ファイルアップロード
   Future<void> postData(List<String?> uploadImages) async {
-
     //保存先URL
     Uri uri = Uri.parse(
         "https://3lewes86g0.execute-api.ap-northeast-1.amazonaws.com/dev/signed_url");
@@ -397,7 +398,7 @@ class _SelectCheckState extends State<SelectCheck> {
     // サーバーにpostする
     try {
       final response =
-      await http.post(uri, headers: headers, body: jsonEncode(body));
+          await http.post(uri, headers: headers, body: jsonEncode(body));
       // 接続成功
       if (response.statusCode == 200) {
         // responseデータからデータを抜き取る
@@ -412,9 +413,7 @@ class _SelectCheckState extends State<SelectCheck> {
             final String imagePath = entry.key;
             // サーバーへのURL
             final String signedUrl = entry.value;
-            final String filename = imagePath
-                .split('/')
-                .last;
+            final String filename = imagePath.split('/').last;
             putImageImpl(
                 imagePath: imagePath, signedUrl: signedUrl, filename: filename);
           }
@@ -444,13 +443,11 @@ class _SelectCheckState extends State<SelectCheck> {
     }
   }
 
-
   // 画像を保存する
-  Future<void> putImageImpl({
-    required String imagePath,
-    required String signedUrl,
-    required String filename
-  }) async {
+  Future<void> putImageImpl(
+      {required String imagePath,
+      required String signedUrl,
+      required String filename}) async {
     final file = File(imagePath); // Fileオブジェクトを作成
     final byteData = await file.readAsBytes(); // Fileオブジェクトからバイトデータを読み込む
     final List<int> bytes = byteData.buffer
@@ -460,10 +457,13 @@ class _SelectCheckState extends State<SelectCheck> {
       final response = await http.put(
         Uri.parse(signedUrl),
         headers: {
-          'Content-Type': 'binary/octet-stream',
+          // Content-Typeを明示的にJPEGを指定
+          'Content-Type': 'image/jpeg',
+          // 'Content-Type': 'binary/octet-stream',
         },
         body: bytes,
       );
+      print("Sending PUT request to $signedUrl");
 
       if (response.statusCode == 200) {
         if (kDebugMode) {
@@ -501,13 +501,11 @@ class _SelectCheckState extends State<SelectCheck> {
     }
   }
 
-
   // setState(() {
   //   _isWriting = false;
   //   Navigator.of(context).pop();
   //   uploadMessage();
   // });
-
 
   //     } else {
   //       if (kDebugMode) {
@@ -549,7 +547,6 @@ class _SelectCheckState extends State<SelectCheck> {
           color: isSelected ? Colors.redAccent : Colors.white, // 選択された画像には赤い枠
         ),
       ),
-
       child: GestureDetector(
         child: Image.memory(
           pathN,
@@ -570,8 +567,6 @@ class _SelectCheckState extends State<SelectCheck> {
     );
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -582,7 +577,8 @@ class _SelectCheckState extends State<SelectCheck> {
           // style: TextStyle(fontSize: 20),
         ),
       ),
-      body: Container( //CustomPaint(
+      body: Container(
+        //CustomPaint(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         // painter: HexagonPainter(),
@@ -593,32 +589,33 @@ class _SelectCheckState extends State<SelectCheck> {
           // 画面の高さに合わせるContainer(
           children: [
             //選択中の画像を表示.選択時の写真を大きく表示
-            Expanded( //余白なくなり中央配置
+            Expanded(
+              //余白なくなり中央配置
               child: Center(
                 child: path != null
                     ? Container(
-                  width: 350, // 背景の固定サイズ（幅）
-                  height: 400, // 背景の固定サイズ（高さ）
-                  decoration: BoxDecoration(
-                  color: Colors.black12, // 背景色
+                        width: 350, // 背景の固定サイズ（幅）
+                        height: 400, // 背景の固定サイズ（高さ）
+                        decoration: BoxDecoration(
+                          color: Colors.black12, // 背景色
 
-                    borderRadius: BorderRadius.circular(12),
-                    // boxShadow: [
-                    //   BoxShadow(
-                    //     color: Colors.black26, // 影の色
-                    //     blurRadius: 10, // ぼかし
-                    //     offset: Offset(0, 4), // 影の位置（下にずらす）
-                    //   ),
-                    // ],
-                  ),
-                  padding: EdgeInsets.all(8),
-                    child: Image.memory(
-                  path!,
-                  width: double.infinity, // 画面幅いっぱいにする
-                  height: double.infinity, // 画面高さいっぱいにする
-                  fit: BoxFit.contain, // 画像が収まるように調整
-                ),
-    )
+                          borderRadius: BorderRadius.circular(12),
+                          // boxShadow: [
+                          //   BoxShadow(
+                          //     color: Colors.black26, // 影の色
+                          //     blurRadius: 10, // ぼかし
+                          //     offset: Offset(0, 4), // 影の位置（下にずらす）
+                          //   ),
+                          // ],
+                        ),
+                        padding: EdgeInsets.all(8),
+                        child: Image.memory(
+                          path!,
+                          width: double.infinity, // 画面幅いっぱいにする
+                          height: double.infinity, // 画面高さいっぱいにする
+                          fit: BoxFit.contain, // 画像が収まるように調整
+                        ),
+                      )
                     : const SizedBox(),
               ),
             ),
@@ -729,7 +726,6 @@ class _SelectCheckState extends State<SelectCheck> {
             // const SizedBox(height: 15),
             // const Divider(),
 
-
             //横スクロールボタン（左アイコン）：過去
             // Row(children: [
             //   height: 40,
@@ -754,7 +750,6 @@ class _SelectCheckState extends State<SelectCheck> {
             // ),
             //   )],
             //   ),
-
 
             //横スクロールする画像リスト（右アイコン）：過去
             // Expanded(
@@ -827,15 +822,15 @@ class _SelectCheckState extends State<SelectCheck> {
               child: Column(
                 mainAxisSize: MainAxisSize.max,
                 children: [
-                  const Text('画像をアプリに登録しますか？', style:
-                  TextStyle(
-                    fontSize: 18, //30
-                    color: Color(0xFF29B6F6),
-                    fontWeight: FontWeight.bold,
-                  ),
+                  const Text(
+                    '画像をアプリに登録しますか？',
+                    style: TextStyle(
+                      fontSize: 18, //30
+                      color: Color(0xFF29B6F6),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 15),
-
 
                   //padding: const EdgeInsets.all(20.0),
                   // child: Column(
@@ -848,7 +843,6 @@ class _SelectCheckState extends State<SelectCheck> {
                   //               color: Colors.white,
                   //               fontWeight: FontWeight.bold)),
 
-
                   //「登録する」ボタン
                   SizedBox(
                     width: double.infinity, //横幅
@@ -857,20 +851,24 @@ class _SelectCheckState extends State<SelectCheck> {
                       onPressed: path == null
                           ? null // 何も選択していない場合は無効
                           : () {
-                        _showWriteDialog();
-                      },
+                              _showWriteDialog();
+                            },
                       //   onPressed: () {
                       //   _showWriteDialog(); // 画像アップロード処理を開始
                       // },
                       // _isWriting ? null : _showWriteDialog,
                       style: AppTheme.dialogYesButtonStyle,
-                      child: const Text('登録する', //Ok
+                      child: const Text(
+                        '登録する', //Ok
                         style: TextStyle(
-                          fontSize: 16,),
+                          fontSize: 16,
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8,),
+                  const SizedBox(
+                    height: 8,
+                  ),
 
                   //「登録しない」ボタン
                   SizedBox(
@@ -881,9 +879,9 @@ class _SelectCheckState extends State<SelectCheck> {
                         Navigator.of(context).pop();
                       },
                       style: AppTheme.dialogNoButtonStyle,
-                      child: const Text('登録しない', //キャンセル
-                        style: TextStyle(
-                            fontSize: 16), //28
+                      child: const Text(
+                        '登録しない', //キャンセル
+                        style: TextStyle(fontSize: 16), //28
                       ),
                     ),
                   ),
@@ -897,40 +895,36 @@ class _SelectCheckState extends State<SelectCheck> {
   }
 }
 
+//                                     )),
+//                               ),
+//                             ),
+//                           ]),
+//                     )),
+//               ]))));
+// }
 
-  //                                     )),
-  //                               ),
-  //                             ),
-  //                           ]),
-  //                     )),
-  //               ]))));
-  // }
-
-
-  // //画面上部表示中の画像のListView内での表示
-  // Widget scrollImage(Uint8List pathN) {
-  //   return Container(
-  //     decoration: BoxDecoration(
-  //         border: Border.all(
-  //       // 選択している画像は周りを赤くする
-  //       color: path == pathN ? Colors.redAccent : Colors.white,
-  //     )),
-  //     child: GestureDetector(
-  //       child: Image.memory(
-  //         pathN,
-  //         width: 100,
-  //         height: 100,
-  //         fit: BoxFit.cover,
-  //       ),
-  //       // タップした画像に切り替える
-  //       onTap: () {
-  //         if (path != pathN) changeImage(pathN);
-  //       },
-  //     ),
-  //   );
-  // }
-
-
+// //画面上部表示中の画像のListView内での表示
+// Widget scrollImage(Uint8List pathN) {
+//   return Container(
+//     decoration: BoxDecoration(
+//         border: Border.all(
+//       // 選択している画像は周りを赤くする
+//       color: path == pathN ? Colors.redAccent : Colors.white,
+//     )),
+//     child: GestureDetector(
+//       child: Image.memory(
+//         pathN,
+//         width: 100,
+//         height: 100,
+//         fit: BoxFit.cover,
+//       ),
+//       // タップした画像に切り替える
+//       onTap: () {
+//         if (path != pathN) changeImage(pathN);
+//       },
+//     ),
+//   );
+// }
 
 //サーバーとの接続ができなかった時のエラーメッセージ表示
 void missAppSeverMessage(BuildContext context) {
@@ -939,7 +933,8 @@ void missAppSeverMessage(BuildContext context) {
     builder: (BuildContext context) {
       return AlertDialog(
         title: Center(
-          child: Text('登録エラー',
+          child: Text(
+            '登録エラー',
             style: AppTheme.errordialogTitleStyle, // エラースタイルを使用
           ),
         ),
