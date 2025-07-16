@@ -50,6 +50,7 @@ dependencies:
   image_cropper: any #crop画面で使用
   flutter_blue_plus: any #bluetoothデバイススキャン接続に必要
   image: ^4.5.2
+  flutter_cache_manager: ^3.4.1
 
 dev_dependencies:
   flutter_launcher_icons: ^0.13.1
@@ -115,8 +116,6 @@ flutter:
       - asset: fonts/NotoSansJp-ExtraBold.ttf #FontWeight.w800
       - asset: fonts/NotoSansJp-Black.ttf #FontWeight.w900
 
-#スプラッシュ画面のデザイン
-#flutter_native_splash:
 
 
   #   - family: Schyler
