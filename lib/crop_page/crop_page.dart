@@ -1,15 +1,12 @@
 //　選択された画像をトリミングし、jpegに変換している
-
+//　リサイズ時に関しては600*488にしておく。ラズパイ側で800*480に修正する
 
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-// import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:photo_manager/photo_manager.dart';
-//import 'package:photo_manager/photo_manager.dart';
 import 'package:image/image.dart' as img;
-
 import '../server_upload/select-photo-check_page.dart';
 
 void cropImage(BuildContext context,
@@ -32,11 +29,10 @@ void cropImage(BuildContext context,
     return;
   }
 
-//画像をトリミングする
+//画像をトリミングする(600*448のままにしておく)
   final croppedFile = await ImageCropper().cropImage(
     sourcePath: fileToCrop.path, // `File` のパスを渡す
     aspectRatio: const CropAspectRatio(ratioX: 600, ratioY: 448),
-    // aspectRatio: const CropAspectRatio(ratioX: 800, ratioY: 480),
     uiSettings: [
       AndroidUiSettings(
         toolbarTitle: 'トリミング',
@@ -49,7 +45,6 @@ void cropImage(BuildContext context,
         cancelButtonTitle: 'Cancel',
         doneButtonTitle: 'Crop',
         minimumAspectRatio: 600 / 448,
-        // minimumAspectRatio: 800 / 480,
         aspectRatioLockEnabled: true, // iOS でもアスペクト比を固定
       ),
     ],
@@ -70,9 +65,6 @@ void cropImage(BuildContext context,
 
     img.Image? image = img.decodeImage(cropBytes);  // 画像をデコード
     img.Image resized = img.copyResize(image!, width: 600, height: 448);  // 解像度を指定してリサイズ
-    //img.Image resized = img.copyResize(image!, width: 800, height: 480);
-
-
     Uint8List resizedBytes = Uint8List.fromList(img.encodeJpg(resized));
 
     //次の画面に渡す

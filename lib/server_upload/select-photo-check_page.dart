@@ -64,29 +64,6 @@ class _SelectCheckState extends State<SelectCheck> {
     for (int i = 0; i < widget.imageData.length; i++) {
       final Uint8List? data = widget.imageData[i];
 
-      if (data != null) {
-        // 先頭10バイトだけ抜き出す
-        final headerBytes = data.sublist(0, 10);
-        print('画像データ先頭バイト: $headerBytes');
-
-        // 画像形式の判別例
-        //　jpegファイルの最初にある識別子（マジックナンバー）を羅列
-        if (headerBytes.length >= 8 &&
-            headerBytes[0] == 137 &&
-            headerBytes[1] == 80 &&
-            headerBytes[2] == 78 &&
-            headerBytes[3] == 71) {
-          print('！！！！！！！！！！！！！！PNG画像');
-        } else if (headerBytes.length >= 3 &&
-            headerBytes[0] == 255 &&
-            headerBytes[1] == 216 &&
-            headerBytes[2] == 255) {
-          print('！！！！！！！！！！！！！！JPEG画像です');
-        } else {
-          print('不明な画像フォーマットです');
-        }
-      }
-
       // ファイル名（.jpeg）の保存
       if (data != null) {
         // Uint8List processedData = cropImage(data);
@@ -288,36 +265,7 @@ class _SelectCheckState extends State<SelectCheck> {
     }
   }
 
-// // 画像アップロード処理を非同期で行う
-//   //ここで二つ出てしまっている・・・
-//   Future<void> _showWriteDialog() async {
-//     setState(() {
-//       _isWriting = true; // アップロード開始
-//     });
-//     uploadMessage(); // 1つめのダイアログを表示
-//
-//     // サーバーに画像データを送る処理
-//     List<String> filePaths = files.map((file) => file.path).toList();
-//
-//     try {
-//       await postData(filePaths);
-//
-//       // アップロード完了後に状態を更新してダイアログを閉じる
-//       setState(() {
-//         _isWriting = false; // アップロード完了
-//       });
-//
-//       Navigator.of(context).pop(); // 1つめのダイアログを閉じる
-//       // uploadMessage(); // ★　再度、完了ダイアログを表示
-//
-//     } catch (e) {
-//       setState(() {
-//         _isWriting = false; // アップロード失敗
-//       });
-//       Navigator.of(context).pop(); // ダイアログを閉じる
-//       missUploadMessage(); // アップロード失敗メッセージを表示
-//     }
-//   }
+
 
   //サーバーとの接続確認後、登録失敗した時のメッセージを表示
   void missUploadMessage() {
@@ -472,11 +420,6 @@ class _SelectCheckState extends State<SelectCheck> {
           count++;
         }
 
-        // // ここで `uploadMessage();` を呼ばず、ダイアログは開いたまま更新する
-        //       setState(() {
-        //         _isWriting = false;
-        //         Navigator.of(context).pop();
-        //         UploadMessage();
         updateDialogState(() {
           _isWriting = false; // UIを更新（登録完了）
         });
@@ -500,42 +443,6 @@ class _SelectCheckState extends State<SelectCheck> {
       missUploadMessage();
     }
   }
-
-  // setState(() {
-  //   _isWriting = false;
-  //   Navigator.of(context).pop();
-  //   uploadMessage();
-  // });
-
-  //     } else {
-  //       if (kDebugMode) {
-  //         print('ファイルアップロード失敗3: ${response.statusCode}');
-  //       }
-  //       setState(() {
-  //         _isWriting = false;
-  //         Navigator.of(context).pop();
-  //         UploadMessage();
-  //       });
-  //     }
-  //   } catch (e) {
-  //     setState(() {
-  //       _isWriting = false;
-  //       Navigator.of(context).pop();
-  //       UploadMessage();
-  //     });
-  //   }
-  // }
-
-  // //書き込みダイアログを表示するための非同期
-  // Future<void> _showWriteDialog() async {
-  //   setState(() {
-  //     _isWriting = true;
-  //     uploadMessage();
-  //   });
-  //   // サーバーに画像データを送る
-  //   List<String> filePaths = files.map((file) => file.path).toList();
-  //   await postData(filePaths);
-  // }
 
   // scrollImageメソッド
   Widget scrollImage(Uint8List pathN) {
@@ -620,187 +527,7 @@ class _SelectCheckState extends State<SelectCheck> {
               ),
             ),
             // SizedBox(
-            //   // color:Colors.greenAccent,
-            //   width: 300, //300
-            //   height: 350, //300
-            //   child: Image.memory(
-            //     path!, fit: BoxFit.cover,
-            //   ),
-            // ),
 
-            // const SizedBox(height: 15,),
-
-            // // 横スクロールリスト（左右ボタン付き：修正）
-            // Row(
-            //   mainAxisAlignment: MainAxisAlignment.center,
-            //   children: [
-            //     // 　「◀」　左アイコンボタン
-            //     IconButton(
-            //       icon: const Icon(Icons.chevron_left),
-            //       onPressed: () {
-            //         _scrollController.animateTo(
-            //           _scrollController.position.minScrollExtent,
-            //           duration: const Duration(milliseconds: 500),
-            //           curve: Curves.easeInOut,
-            //         ).then((_) {
-            //           // スクロール完了後に画像を更新（スクロールボタン複数回連打で画像が数秒程、消えるため画像を固定）
-            //           if (_scrollController.position.pixels == _scrollController.position.minScrollExtent) {
-            //             setState(() {
-            //               // 現在の最初の画像を選択
-            //               path = widget.imageData[0];
-            //             }
-            //             );
-            //           }
-            //         }
-            //         );
-            //       },
-            //       iconSize: 32,
-            //       color: AppTheme.iconColor,
-            //     ),
-            //
-            //     // 横スクロールする画像（修正）
-            //     Flexible(
-            //     child: SizedBox(
-            //       height: 80, // 画像サイズに合わせる
-            //       child: ListView.builder(
-            //         scrollDirection: Axis.horizontal,
-            //         itemCount: widget.imageData.length,
-            //         physics: const BouncingScrollPhysics(),
-            //         controller: _scrollController,
-            //         itemBuilder: (context, index) {
-            //           bool isSelected = path == widget.imageData[index];
-            //
-            //           return GestureDetector(
-            //             onTap: () {
-            //               changeImage(widget.imageData[index]!);
-            //             },
-            //             child: Container(
-            //               decoration: BoxDecoration(
-            //                 border: Border.all(
-            //                   color: isSelected ? Colors.redAccent : Colors
-            //                       .transparent,
-            //                   width: 2,
-            //                 ),
-            //                 borderRadius: BorderRadius.circular(5),
-            //               ),
-            //               margin: const EdgeInsets.symmetric(horizontal: 4),
-            //               child: Image.memory(
-            //                 widget.imageData[index]!,
-            //                 width: 80,
-            //                 height: 80,
-            //                 fit: BoxFit.cover,
-            //               ),
-            //             ),
-            //           );
-            //         },
-            //       ),
-            //     ),
-            //     ),
-            //
-            //
-            //
-            //     // 「▶」右アイコンボタン（修正）
-            //     IconButton(
-            //       onPressed: () {
-            //         _scrollController.animateTo(
-            //           _scrollController.position.maxScrollExtent,
-            //           duration: const Duration(milliseconds: 500),
-            //           curve: Curves.easeInOut,
-            //         ).then((_) {
-            //           // スクロール完了後に画像を更新
-            //           if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent) {
-            //             setState(() {
-            //               // 現在の最後の画像を選択
-            //               path = widget.imageData[widget.imageData.length - 1];
-            //             });
-            //           }
-            //         });
-            //       },
-            //       icon: const Icon(Icons.chevron_right),
-            //       iconSize: 32,
-            //       color: AppTheme.iconColor,
-            //     ),
-            //   ],
-            // ),
-            //
-            // const SizedBox(height: 15),
-            // const Divider(),
-
-            //横スクロールボタン（左アイコン）：過去
-            // Row(children: [
-            //   height: 40,
-            //   width: 40,
-            // decoration: BoxDecoration(
-            //   borderRadius: BorderRadius.circular(30), // ここで角の丸みを指定
-            //   color: Colors.grey, // 背景色
-            // ),
-            //
-            // child: IconButton(
-            //   // 押したら画像リストの最初の画像のある部分まで移動する
-            //   onPressed: () {
-            //     _scrollController.animateTo(
-            //       _scrollController.position.minScrollExtent,
-            //       duration: const Duration(seconds: 2),
-            //       curve: Curves.fastOutSlowIn,
-            //     );
-            //   },
-            //   icon: const Icon(
-            //     Icons.chevron_left,
-            //   ),
-            // ),
-            //   )],
-            //   ),
-
-            //横スクロールする画像リスト（右アイコン）：過去
-            // Expanded(
-            //     child: Container(
-            //   width: MediaQuery.of(context).size.width,
-            //   height: 100,
-            //   color: Colors.white38,
-            //
-            //   // color: Colors.white,
-            //   child: ListView.builder(
-            //     scrollDirection: Axis.horizontal,
-            //     //横にスクロールできるようにする
-            //     itemCount: widget.imageData.length,
-            //     physics: const BouncingScrollPhysics(),
-            //     controller: _scrollController,
-            //     itemBuilder: (context, index) {
-            //       return Padding(
-            //         padding: const EdgeInsets.symmetric(
-            //           horizontal: 8.0,
-            //           vertical: 4.0,
-            //         ),
-            //         child: scrollImage(widget.imageData[index]!),
-            //       );
-            //     },
-            //   ),
-            // ),
-            // ),
-
-            // 登録選択のデザイン
-            // Container(
-            //   height: 35,
-            //   width: 35,
-            //   decoration: BoxDecoration(
-            //     borderRadius: BorderRadius.circular(30), // ここで角の丸みを指定
-            //     color: Colors.grey, // 背景色
-            //   ),
-            // child: IconButton(
-            //   // 押したら最後の画像がある部分まで移動する
-            //   onPressed: () {
-            //     _scrollController.animateTo(
-            //       _scrollController.position.maxScrollExtent,
-            //       duration: const Duration(seconds: 2),
-            //       curve: Curves.fastOutSlowIn,
-            //     );
-            //   },
-            //   icon: const Icon(Icons.chevron_right,
-            //       color: Colors.black),
-            //     // ),
-            //   ),
-            // ),
-            // const Divider(),
 
             //選択後のポップアップ、「登録しますか？」とボタン
             Container(
@@ -810,15 +537,6 @@ class _SelectCheckState extends State<SelectCheck> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
               ),
-              // decoration: const BoxDecoration(
-              //   color: Color.fromARGB(221, 57, 57, 57),
-              //   borderRadius: BorderRadius.only(
-              //     topLeft: Radius.circular(30.0),
-              //     topRight: Radius.circular(30.0),
-              //     bottomLeft: Radius.circular(30.0),
-              //     bottomRight: Radius.circular(30.0),
-              //   ),
-              // ),
               child: Column(
                 mainAxisSize: MainAxisSize.max,
                 children: [
@@ -831,17 +549,6 @@ class _SelectCheckState extends State<SelectCheck> {
                     ),
                   ),
                   const SizedBox(height: 15),
-
-                  //padding: const EdgeInsets.all(20.0),
-                  // child: Column(
-                  //     mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  //     mainAxisSize: MainAxisSize.min,
-                  //     children: [
-                  //       Text('アプリに登録する',
-                  //           style: TextStyle(
-                  //               fontSize: 24,//30
-                  //               color: Colors.white,
-                  //               fontWeight: FontWeight.bold)),
 
                   //「登録する」ボタン
                   SizedBox(
@@ -895,37 +602,6 @@ class _SelectCheckState extends State<SelectCheck> {
   }
 }
 
-//                                     )),
-//                               ),
-//                             ),
-//                           ]),
-//                     )),
-//               ]))));
-// }
-
-// //画面上部表示中の画像のListView内での表示
-// Widget scrollImage(Uint8List pathN) {
-//   return Container(
-//     decoration: BoxDecoration(
-//         border: Border.all(
-//       // 選択している画像は周りを赤くする
-//       color: path == pathN ? Colors.redAccent : Colors.white,
-//     )),
-//     child: GestureDetector(
-//       child: Image.memory(
-//         pathN,
-//         width: 100,
-//         height: 100,
-//         fit: BoxFit.cover,
-//       ),
-//       // タップした画像に切り替える
-//       onTap: () {
-//         if (path != pathN) changeImage(pathN);
-//       },
-//     ),
-//   );
-// }
-
 //サーバーとの接続ができなかった時のエラーメッセージ表示
 void missAppSeverMessage(BuildContext context) {
   showDialog(
@@ -959,18 +635,6 @@ void missAppSeverMessage(BuildContext context) {
                   style: AppTheme.errorContentStyle, // エラースタイルを使用
                   textAlign: TextAlign.center, // テキストを中央揃え
                 ),
-
-                // const Text
-                //   (
-                //   'サービスが一時的に\n利用できません。'
-                //       '\nしばらくしてから\n再度お試しください。',
-                //
-                //   style: TextStyle(
-                //     color: Colors.black,
-                //     fontSize: 16,
-                //   ),
-                //   textAlign: TextAlign.center,
-                // ),
 
                 const SizedBox(height: 20),
 
