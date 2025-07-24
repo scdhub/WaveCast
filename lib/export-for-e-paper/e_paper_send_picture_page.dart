@@ -78,9 +78,13 @@ class _SendPictureSelect extends State<SendPictureSelect> {
 
   //********************* Wi-Fi通信を行う場合 ***************************
   //_createImageTapの遷移先をsendImagePictureWifiに変更
+  // 今後修正（固定値になっているので）
   final String server_Url = "http://192.168.200.58:5000/upload";
   bool _showIndicator = false;
   DateTime? _startTime;
+  //進捗インジケータUI
+  // Timer? _countdownTimer;
+  // int _remainingSeconds = 30;
   //*****************************************************************
 
 
@@ -591,8 +595,8 @@ class _SendPictureSelect extends State<SendPictureSelect> {
                     debugPrint(
                         "■ sending to trustName=${widget.trustName}, IP=${widget.deviceInfo}");
                     // callNativeMethod(_items[index].url);//電子ペーパに送るときはここ
-                     sendImagePictureBle(_items[index ].url); //BLE通信をしたいときはここ
-                    //sendImagePictureWifi(_items[index].url); //wifi通信をしたいときはここ
+                    // sendImagePictureBle(_items[index ].url); //BLE通信をしたいときはここ
+                    sendImagePictureWifi(_items[index].url); //wifi通信をしたいときはここ
                   });
             },
       child: _createCheckMark(index, isSelected),
@@ -843,13 +847,15 @@ class _SendPictureSelect extends State<SendPictureSelect> {
       _showIndicator = true;
     });
 
+
     try {
       // まずimageUrl を使ってキャッシュからファイル取得
       final file = await (widget.cacheManager ?? DefaultCacheManager())
           .getSingleFile(imageUrl);
       final imageBytes = await file.readAsBytes();
       // ファイル名を抽出する際は明示的にしないと送信の際に形式が変わってしまうケースがある。
-      final String fileName = 'image_${DateTime.now().toIso8601String()}.jpg';
+      final String fileName = 'image_${DateTime.now().toIso8601String()}.bmp';
+      //final String fileName = 'image_${DateTime.now().toIso8601String()}.jpg';
       //　こっちだと形式が正しく表示されず間違った形式で送信された。
       // final String fileName = path.basename(file.path);
 
@@ -861,7 +867,8 @@ class _SendPictureSelect extends State<SendPictureSelect> {
             'image',
             imageBytes,
             filename: fileName, // 明示的に .jpg をつけないとandroidは.octet-streamで飛ばされる
-            contentType: MediaType('image', 'jpg'),
+             contentType: MediaType('image', 'bmp'),
+            // contentType: MediaType('image', 'jpg'),
           ),
         );
 
@@ -877,6 +884,8 @@ class _SendPictureSelect extends State<SendPictureSelect> {
       }
     } catch (e) {
       debugPrint(" Wi‑Fi 通信エラー: $e");
+      // _countdownTimer?.cancel();
+      // setState(() => _showIndicator = false);｝｝
     } finally {
       setState(() => isSending = false);
     }
