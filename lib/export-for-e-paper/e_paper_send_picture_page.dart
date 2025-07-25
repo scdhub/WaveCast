@@ -70,16 +70,23 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   //_createImageTapの遷移先をsendImagePictureBLEに変更
   //チャンクサイズ
   int chunkSize = 180;
+
   //　チャンネル登録中（URL）
-  final Guid service_UUID = Guid("12345678-1234-5678-1234-56789abcdef0");
-  final Guid char_UUID = Guid("12345678-1234-5678-1234-56789abcdef1");
+  //1.PibLE-Bluezero
+  // final Guid service_UUID = Guid("12345678-1234-5678-1234-56789abcdef0");
+  // final Guid char_UUID = Guid("12345678-1234-5678-1234-56789abcdef1");
+
+  //1.PibLE-Bluezero
+  final Guid service_UUID = Guid("12345678-1234-5678-1234-55555abcdef0");
+  final Guid char_UUID = Guid("12345678-1234-5678-1234-55555abcdef1");
   int totalSentBytes = 0;
   //****************************************************************
 
   //********************* Wi-Fi通信を行う場合 ***************************
   //_createImageTapの遷移先をsendImagePictureWifiに変更
   // 今後修正（固定値になっているので）
-  final String server_Url = "http://192.168.200.58:5000/upload";
+  //final String server_Url = "http://192.168.200.58:5000/upload";
+  final String server_Url = "http://192.168.200.36:5000/upload";
   bool _showIndicator = false;
   DateTime? _startTime;
   //進捗インジケータUI
@@ -595,7 +602,7 @@ class _SendPictureSelect extends State<SendPictureSelect> {
                     debugPrint(
                         "■ sending to trustName=${widget.trustName}, IP=${widget.deviceInfo}");
                     // callNativeMethod(_items[index].url);//電子ペーパに送るときはここ
-                    // sendImagePictureBle(_items[index ].url); //BLE通信をしたいときはここ
+                     //sendImagePictureBle(_items[index ].url); //BLE通信をしたいときはここ
                     sendImagePictureWifi(_items[index].url); //wifi通信をしたいときはここ
                   });
             },
@@ -853,9 +860,9 @@ class _SendPictureSelect extends State<SendPictureSelect> {
       final file = await (widget.cacheManager ?? DefaultCacheManager())
           .getSingleFile(imageUrl);
       final imageBytes = await file.readAsBytes();
+
       // ファイル名を抽出する際は明示的にしないと送信の際に形式が変わってしまうケースがある。
-      final String fileName = 'image_${DateTime.now().toIso8601String()}.bmp';
-      //final String fileName = 'image_${DateTime.now().toIso8601String()}.jpg';
+      final String fileName = 'image_${DateTime.now().toIso8601String()}.jpg';
       //　こっちだと形式が正しく表示されず間違った形式で送信された。
       // final String fileName = path.basename(file.path);
 
@@ -867,8 +874,8 @@ class _SendPictureSelect extends State<SendPictureSelect> {
             'image',
             imageBytes,
             filename: fileName, // 明示的に .jpg をつけないとandroidは.octet-streamで飛ばされる
-             contentType: MediaType('image', 'bmp'),
-            // contentType: MediaType('image', 'jpg'),
+             // contentType: MediaType('image', 'bmp'),
+            contentType: MediaType('image', 'jpg'),
           ),
         );
 
