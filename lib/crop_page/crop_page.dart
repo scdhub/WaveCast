@@ -32,7 +32,8 @@ void cropImage(BuildContext context,
 //画像をトリミングする(600*448のままにしておく)
   final croppedFile = await ImageCropper().cropImage(
     sourcePath: fileToCrop.path, // `File` のパスを渡す
-    aspectRatio: const CropAspectRatio(ratioX: 600, ratioY: 448),
+    // aspectRatio: const CropAspectRatio(ratioX: 600, ratioY: 448),
+    aspectRatio: const CropAspectRatio(ratioX: 800, ratioY: 480),
     uiSettings: [
       AndroidUiSettings(
         toolbarTitle: 'トリミング',
@@ -44,7 +45,8 @@ void cropImage(BuildContext context,
         title: 'トリミング画面',
         cancelButtonTitle: 'Cancel',
         doneButtonTitle: 'Crop',
-        minimumAspectRatio: 600 / 448,
+        // minimumAspectRatio: 600 / 448,
+        minimumAspectRatio: 800 / 480,
         aspectRatioLockEnabled: true, // iOS でもアスペクト比を固定
       ),
     ],
@@ -64,7 +66,8 @@ void cropImage(BuildContext context,
     }
 
     img.Image? image = img.decodeImage(cropBytes);  // 画像をデコード
-    img.Image resized = img.copyResize(image!, width: 600, height: 448);  // 解像度を指定してリサイズ
+    //img.Image resized = img.copyResize(image!, width: 600, height: 448);  // 解像度を指定してリサイズ
+    img.Image resized = img.copyResize(image!, width: 800, height: 480);  // 解像度を指定してリサイズ
     Uint8List resizedBytes = Uint8List.fromList(img.encodeJpg(resized));
 
     //次の画面に渡す

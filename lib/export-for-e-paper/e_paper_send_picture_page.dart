@@ -85,8 +85,8 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   //********************* Wi-Fi通信を行う場合 ***************************
   //_createImageTapの遷移先をsendImagePictureWifiに変更
   // 今後修正（固定値になっているので）
-  //final String server_Url = "http://192.168.200.58:5000/upload";
-  final String server_Url = "http://192.168.200.36:5000/upload";
+  final String server_Url = "http://192.168.200.58:5000/upload";
+  // final String server_Url = "http://192.168.200.36:5000/upload";
   bool _showIndicator = false;
   DateTime? _startTime;
   //進捗インジケータUI
@@ -851,9 +851,28 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   void sendImagePictureWifi(String imageUrl) async {
     _startTime = DateTime.now();
     setState(() {
-      _showIndicator = true;
+      isConnected = true;
+      isSending = true;
+      progressPercent = 0.0;
     });
 
+    const duration = Duration(milliseconds: 100);
+    int counter = 0;
+    const maxCount = 340;
+
+    Timer.periodic(duration, (Timer timer) {
+      counter++;
+      setState(() {
+        progressPercent = (counter / maxCount).clamp(0.0, 1.0);
+      });
+
+      if (counter >= maxCount) {
+        timer.cancel();
+        setState(() {
+          progressPercent = 0.0; // ★ここでリセット
+        });
+      }
+    });
 
     try {
       // まずimageUrl を使ってキャッシュからファイル取得
@@ -901,10 +920,9 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     } catch (_) {}
     setState(() {
       isSending = false;
-      // インジゲーターが止まる処理
       isConnected = false;
       connectionState = 'disconnect';
-      progressPercent = 0.0;
+      // progressPercent = 0.0;
     });
   }
 }
