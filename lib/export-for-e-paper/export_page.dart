@@ -46,7 +46,8 @@ class _ExportPageState extends State<ExportPage> {
       appBar: AppBar(
         centerTitle: true,
         title: const Text(
-          'E-paperに配信',
+          'BLE通信',
+          // 'E-paperに配信',
           // style: TextStyle(
           //   fontSize: 17,)
         ),

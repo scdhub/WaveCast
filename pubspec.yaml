@@ -51,6 +51,8 @@ dependencies:
   flutter_blue_plus: any #bluetoothデバイススキャン接続に必要
   image: ^4.5.2
   flutter_cache_manager: ^3.4.1
+  socket_io_client: ^2.0.3
+  dio: ^5.1.2
 
 dev_dependencies:
   flutter_launcher_icons: ^0.13.1

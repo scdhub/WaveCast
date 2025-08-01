@@ -29,7 +29,7 @@ void cropImage(BuildContext context,
     return;
   }
 
-//画像をトリミングする(600*448のままにしておく)
+//画像をトリミングする(旧は600*448)
   final croppedFile = await ImageCropper().cropImage(
     sourcePath: fileToCrop.path, // `File` のパスを渡す
     // aspectRatio: const CropAspectRatio(ratioX: 600, ratioY: 448),

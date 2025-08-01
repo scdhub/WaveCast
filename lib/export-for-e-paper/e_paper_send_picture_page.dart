@@ -883,27 +883,20 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   //
   //   // ファイル名を抽出する際は明示的にしないと送信の際に形式が変わってしまうケースがある。
   //   final String fileName = 'image_${DateTime.now().toIso8601String()}.jpg';
-  //   //　こっちだと形式が正しく表示されず間違った形式で送信された。
-  //   // final String fileName = path.basename(file.path);
 
-  // １）アップロードだけを担当
+
+  // 画像のアップロードだけを担当
   Future<void> _upload(String imageUrl) async {
     final dio = Dio();
-    final file = await (widget.cacheManager ?? DefaultCacheManager())
-        .getSingleFile(imageUrl);
+    final file = await (widget.cacheManager ?? DefaultCacheManager()).getSingleFile(imageUrl);
     final bytes = await file.readAsBytes();
-    final form = FormData.fromMap({
-      'image': MultipartFile.fromBytes(
-        bytes,
-        filename: path.basename(file.path),
+    final form = FormData.fromMap({'image': MultipartFile.fromBytes(bytes, filename: path.basename(file.path),
         contentType: MediaType('image', 'jpg'),
       ),
     });
 
-    await dio.post(
-      server_Url,
-      data: form,
-      onSendProgress: (sent, total) {
+    //　完了を待つ
+    await dio.post(server_Url, data: form, onSendProgress: (sent, total) {
         setState(() {
           progressPercent = total > 0 ? (sent / total) * 0.9 : 0.0;
         });
@@ -911,12 +904,16 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     );
   }
 
-  // ２）完了ステータスのポーリングだけを担当
+  // 完了ステータスのポーリングだけを担当
   void _startPolling() {
-    Timer.periodic(Duration(seconds: 1), (timer) async {
+    //　ログ+100
+    //Timer.periodic(Duration(seconds: 1), (timer) async {
+    Timer.periodic(Duration(milliseconds: 100), (timer) async {
       try {
+        //　返答待ち
         final resp = await Dio().get('http://192.168.200.58:5000/status');
         final data = resp.data as Map<String, dynamic>;
+        // statusでserverの現状態を取り出す
         final status = data['status'] as String;
         final elapsed = (data['elapsed_time'] ?? 0.0) as double;
         if (status == 'done' || status == 'error') {
@@ -924,13 +921,14 @@ class _SendPictureSelect extends State<SendPictureSelect> {
           _onDisplayDone(elapsed);
         }
       } catch (_) {
+        //　ここで進捗インジケータを非表示
         timer.cancel();
         setState(() => isSending = false);
       }
     });
   }
 
-  // ３）描画プログレスと最終クリアを担当
+  // 描画プログレスと最終クリアを担当
   void _onDisplayDone(double elapsedSec) {
     // ① まず即座にバーを100%に
     setState(() {
@@ -938,7 +936,7 @@ class _SendPictureSelect extends State<SendPictureSelect> {
       isSending = false;
     });
 
-    // // ② ほんの短いフェードアウトだけか、即消
+    //　必要ではないかも
     // Future.delayed(Duration(milliseconds: 10), () {
     //   setState(() {
     //     isSending = false;

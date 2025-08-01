@@ -213,7 +213,8 @@ class _ConnectBTPageState extends State<ConnectBTPage> {
             }),
         title: const Text(
           //画面上に表示される
-          'E-paperに配信',
+          'BLE通信',
+          // 'E-paperに配信',
           style: TextStyle(
               // fontSize: 17,
               ),
