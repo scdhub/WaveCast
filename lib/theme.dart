@@ -9,7 +9,7 @@ class AppTheme {
   static const Color textColor = Colors.white; // 全体のテキストカラー
   static const Color appBarTextColor = Color(0xFF1D5844); // AppBar全体の文字色
   static const Color iconColor = Colors.white; // アイコン全体の色
-  static const Color buttonColor = Color(0xFF44DD92); // ボタン全体の色（青系）
+  static const Color buttonColor = Color(0xFF44DD92); // ボタン全体の色
 
   // //部分的なカラー定義（各ボタンに色の差異）
   // static const Color buttonBackgroundColor1 = Color(0xFF3D5AFE); //BT＆配信関連ボタン
