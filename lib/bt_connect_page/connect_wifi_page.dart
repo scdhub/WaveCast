@@ -9,25 +9,13 @@ import '../export-for-e-paper/e_paper_send_picture_page.dart';
 import '../theme.dart';
 
 
-// class ConnectWifiPage extends StatefulWidget {
-//   const ConnectWifiPage({super.key});
-
 class ConnectWifiPage extends StatefulWidget {
-final BluetoothDevice deviceInfo;
-final BluetoothDevice trustDevice;
-final String? ipAddress;
-final String trustName;
+  final CacheManager cacheManager;
 
-final CacheManager? cacheManager;
-const ConnectWifiPage(
-{super.key,
-required this.deviceInfo,
-required this.trustDevice,
-required this.trustName,
-required this.ipAddress,
-this.cacheManager,
-});
-
+  const ConnectWifiPage({
+    Key? key,
+    required this.cacheManager,
+  }) : super(key: key);
 
   @override
   State<ConnectWifiPage> createState() => _ConnectWifiPage();
@@ -39,9 +27,6 @@ final List<String> dummyWiFidata = [
   "192.168.2.8"
 ];
 
-// void main() {
-//   runApp(const ConnectWifiPage());
-// }
 
 class _ConnectWifiPage extends State<ConnectWifiPage> {
   // ここで登録したサーバーを保存し、リストに表示させる。
@@ -105,20 +90,17 @@ class _ConnectWifiPage extends State<ConnectWifiPage> {
                 ),
                 title: Text(savedServers[index],
                     style: TextStyle(color: Colors.white)),
-
                 onTap: () {
-                  Navigator.push(context,
-                      MaterialPageRoute(
-                      builder: (_) => SendPictureSelect(
-                      ipAddress: savedServers[index],
-                    deviceInfo: widget.deviceInfo,
-                    trustDevice: widget.trustDevice,
-                        cacheManager: widget.cacheManager,
-                    trustName: 'My BLE Device',
-                  // debugPrint(
-                  //     '${savedServers[index]} を押下して遷移する処理を追加');
+                  Navigator.push(context, MaterialPageRoute(builder: (context)
+                  => SendPictureSelect(
+                    // deviceInfo: widget.deviceInfo,
+                    // trustDevice: widget.trustDevice,
+                    // trustName: widget.trustName,
+                    cacheManager: widget.cacheManager,
+                    ipAddress: savedServers[index],
                   )));
-                },
+                  },
+
                 //長押し
                 onLongPress: () {
                   _longPressDialog(index); // index を渡す！
@@ -153,8 +135,7 @@ class _ConnectWifiPage extends State<ConnectWifiPage> {
               ),
               keyboardType: TextInputType.number,
             ),
-
-            // children :[]
+            
             actionsAlignment: MainAxisAlignment.center,
             actions: [
               TextButton(
@@ -183,67 +164,66 @@ class _ConnectWifiPage extends State<ConnectWifiPage> {
   }
 
   void _longPressDialog(index) {
-    showDialog(context: context,
-    barrierDismissible: false,
-    builder: (ctx) => AlertDialog(
-        title: Text(
-          "確認",
-          style: AppTheme.dialogTitleStyle, //theme.dartのスタイルを使用
-          textAlign: TextAlign.center,
-        ),
-        content: Column(
-            mainAxisSize: MainAxisSize.min, //サイズ調節
-            children: [
-              Text(
-                '登録を解除しますか？',
-                style: AppTheme.dialogContentStyle, //theme.dartのスタイルを使用
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 10, // ボタン間の間隔
-                runSpacing: 10, // 折り返した際の間隔
-                alignment: WrapAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 100, // ボタンの横幅を制限
-                    child: ElevatedButton(
-                      style:
-                      AppTheme.dialogYesButtonStyle, //theme.dartのスタイルを使用
-                      onPressed: () async {
-                        Navigator.of(context).pop(); // まずダイアログを閉じる
-                        setState(() {
-                          savedServers.removeAt(index);
-                        });
-                        await _saveIpDataSharedPrefrences();
-                        //   ScaffoldMessenger.of(context).showSnackBar(
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+          title: Text(
+            "確認",
+            style: AppTheme.dialogTitleStyle, //theme.dartのスタイルを使用
+            textAlign: TextAlign.center,
+          ),
+          content: Column(
+              mainAxisSize: MainAxisSize.min, //サイズ調節
+              children: [
+                Text(
+                  '登録を解除しますか？',
+                  style: AppTheme.dialogContentStyle, //theme.dartのスタイルを使用
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 10, // ボタン間の間隔
+                  runSpacing: 10, // 折り返した際の間隔
+                  alignment: WrapAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 100, // ボタンの横幅を制限
+                      child: ElevatedButton(
+                        style:
+                            AppTheme.dialogYesButtonStyle, //theme.dartのスタイルを使用
+                        onPressed: () async {
+                          Navigator.of(context).pop(); // まずダイアログを閉じる
+                          setState(() {
+                            savedServers.removeAt(index);
+                          });
+                          await _saveIpDataSharedPrefrences();
+                          //   ScaffoldMessenger.of(context).showSnackBar(
                         },
-                        child:
-                        const Text(
+                        child: const Text(
                           "はい",
                           style: TextStyle(
                               color: Colors.white, fontWeight: FontWeight.bold),
                         ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 100,
-                    child: ElevatedButton(
-                      style:
-                      AppTheme.dialogNoButtonStyle, //theme.dartのスタイルを使用
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text(
-                        "いいえ",
-                        style: TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.bold),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-            ])),
+                    SizedBox(
+                      width: 100,
+                      child: ElevatedButton(
+                        style:
+                            AppTheme.dialogNoButtonStyle, //theme.dartのスタイルを使用
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text(
+                          "いいえ",
+                          style: TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+              ])),
     );
   }
 }
-

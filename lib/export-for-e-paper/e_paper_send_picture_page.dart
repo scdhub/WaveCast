@@ -3,7 +3,7 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
+// import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -15,7 +15,7 @@ import 'package:iphone_bt_epaper/export-for-e-paper/server_image_delete_check_po
 import 'package:iphone_bt_epaper/export-for-e-paper/sever_data_bind.dart';
 import 'package:transparent_image/transparent_image.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
-import '../service/socket_service.dart';
+// import '../service/socket_service.dart';
 import 'bluetooth_connection_state.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
@@ -26,19 +26,44 @@ import 'package:dio/dio.dart' show Dio, FormData, MultipartFile;
 
 import '../theme.dart';
 
+// SendPictureSelect() を使っているすべての箇所で、それぞれの引数を渡さないとエラー になる
+// wifi通信とBLE通信を切り分ける際に、引数で判別するように修正する。
+// class SendPictureSelect extends StatefulWidget {
+// final BluetoothDevice deviceInfo;
+// final BluetoothDevice trustDevice;
+//
+// final String trustName;
+//
+// final CacheManager? cacheManager;
+// const SendPictureSelect(
+// {super.key,
+// required this.deviceInfo,
+// required this.trustDevice,
+// required this.trustName,
+// this.cacheManager});
+
 class SendPictureSelect extends StatefulWidget {
-  final BluetoothDevice deviceInfo;
-  final BluetoothDevice trustDevice;
-
-  final String trustName;
-
+  final BluetoothDevice? deviceInfo;
+  final BluetoothDevice? trustDevice;
+  final String? trustName;
+  final String? ipAddress;
   final CacheManager? cacheManager;
-  const SendPictureSelect(
-      {super.key,
-      required this.deviceInfo,
-      required this.trustDevice,
-      required this.trustName,
-      this.cacheManager});
+
+
+  const SendPictureSelect({
+    Key? key,
+    this.deviceInfo,
+    this.trustDevice,
+    this.trustName,
+    this.ipAddress,
+    this.cacheManager,
+  }) : assert(
+  // BLEモード or Wi-Fiモードのどちらか一方は必須
+  (ipAddress != null) ||
+      (deviceInfo != null && trustDevice != null && trustName != null),
+  'Either ipAddress (Wi-Fi) or deviceInfo+trustDevice+trustName (BLE) must be provided.'
+  ),
+        super(key: key);
 
   @override
   State<StatefulWidget> createState() => _SendPictureSelect();
@@ -79,7 +104,7 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   // final Guid service_UUID = Guid("12345678-1234-5678-1234-56789abcdef0");
   // final Guid char_UUID = Guid("12345678-1234-5678-1234-56789abcdef1");
 
-  //1.PibLE-Bluezero
+  //1.PibLE-Bluezero2
   final Guid service_UUID = Guid("12345678-1234-5678-1234-55555abcdef0");
   final Guid char_UUID = Guid("12345678-1234-5678-1234-55555abcdef1");
   int totalSentBytes = 0;
@@ -89,7 +114,7 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   //********************* Wi-Fi通信を行う場合 ***************************
   //_createImageTapの遷移先をsendImagePictureWifiに変更
   // 今後修正（固定値になっているので）
-  final String server_Url = "http://192.168.200.58:5000/upload";
+  //final String server_Url = "http://192.168.200.58:5000/upload";
 
   // final String server_Url = "http://192.168.200.36:5000/upload";
   bool _showIndicator = false;
@@ -226,14 +251,6 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     callSdkMessage(data);
   }
 
-  // Future<void> _handleSendImageToDeviceCanceled(
-  //     Map<String, dynamic> data) async {
-  //   progressPercent = 0.0;
-  //   setState(() {
-  //     isSending = false;
-  //   });
-  //   callSdkMessage(data);
-  // }
 
   Future<void> initialize() async {
     // 画像取得
@@ -253,12 +270,20 @@ class _SendPictureSelect extends State<SendPictureSelect> {
 
   //サーバー接続
   Future onDiscoverServicesPressed({required String sendImage}) async {
+    // Wi-Fi モードでは呼ばれないようにガード
+    if (widget.deviceInfo == null || widget.trustDevice == null) return;
+
+    // 以降は必ず non-null なので `!` で取得
+    final device = widget.deviceInfo!;
+    final trust = widget.trustDevice!;
+
     debugPrint('登録処理');
     //目的UUID
     // BluetoothCharacteristic? targetCharacteristic;
     try {
       // デバイスと接続する
-      await widget.deviceInfo.connect();
+      // await widget.deviceInfo.connect();
+      await device.connect();
 
       if (kDebugMode) {
         print('コネクト成功');
@@ -270,7 +295,8 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     }
     try {
       // デバイスのサービス情報を読み取る
-      services = await widget.deviceInfo.discoverServices();
+      // services = await widget.deviceInfo.discoverServices();
+      services = await device.discoverServices();
 /*
        //E-Paperの画像を書き込むUUIDを見つける
        for (BluetoothService service in services) {
@@ -308,7 +334,8 @@ class _SendPictureSelect extends State<SendPictureSelect> {
      }
     */
     //デバイスとの接続を切る
-    await widget.deviceInfo.disconnect();
+    //await widget.deviceInfo.disconnect();
+    await device.disconnect();
   }
 
   // BL接続　ボタン押下時にここから送信画面に進んでいく
@@ -351,195 +378,220 @@ class _SendPictureSelect extends State<SendPictureSelect> {
 
   @override
   Widget build(BuildContext context) {
-    // TODO: implement build
+    //　モードを切り替える
+    final bool isWifiMode = widget.ipAddress != null;
+
     return Stack(children: [
       Scaffold(
-        appBar: AppBar(
-          centerTitle: true,
-          title: const Text('配信用登録画像一覧'),
-          actions: [
-            Container(
-              child: BluetoothConnection(connectionState), // BL接続状況表示
-            )
-          ],
-        ),
-        body: Column(
-          children: [
-            // AppBar下の固定バー
-            Container(
-              height: AppBar().preferredSize.height,
-              width: MediaQuery
-                  .of(context)
-                  .size
-                  .width,
-              color: Colors.white,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  ToggleButtons(
-                    color: Colors.blue,
-                    fillColor: Colors.blue[300],
-                    borderColor: Colors.blue[100],
-                    splashColor: Colors.blue[300],
-                    selectedBorderColor: Colors.blue[800],
-                    selectedColor: Colors.white,
-                    borderRadius: const BorderRadius.all(Radius.circular(10)),
-                    constraints: BoxConstraints(
-                        minHeight: AppBar().preferredSize.height * 0.65,
-                        minWidth: MediaQuery
-                            .of(context)
-                            .size
-                            .width / 5),
-                    isSelected: selectedMode,
-                    onPressed: (int index) {
-                      setState(() {
-                        if (index == 0) {
-                          selectedMode[0] = true;
-                          selectedMode[1] = false;
-                          deleteMode = false;
-                        } else {
-                          selectedMode[0] = false;
-                          selectedMode[1] = true;
-                          deleteMode = true;
-                        }
-                        if (!deleteMode) {
-                          _deleteItems.clear();
-                        }
-                      });
-                    },
-                    children: const [
-                      Row(
-                        children: [Icon(Icons.ios_share), Text('  配信')],
-                      ),
-                      Row(
-                        children: [Icon(Icons.delete), Text('  削除')],
-                      )
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      const Text(
-                        '表示順：',
-                        style: TextStyle(
-                          color: Colors.blue,
+          appBar: AppBar(
+            centerTitle: true,
+            title: const Text('配信用登録画像一覧'),
+            actions: [
+              Container(
+                child: BluetoothConnection(connectionState), // BL接続状況表示
+              )
+            ],
+          ),
+          body:
+          // isWifiMode
+          //     //  Wi-Fi モード用 UI ───
+          //     ? Center(
+          //         child: Column(
+          //           mainAxisSize: MainAxisSize.min,
+          //           children: [
+          //             Text('Wi-Fi 送信先: ${widget.ipAddress}'),
+          //             const SizedBox(height: 16),
+          //             ElevatedButton(
+          //               onPressed: () {
+          //                 // ここに「送信実行処理」を書くけどエラー出
+          //
+          //               },
+          //               child: const Text('画像を送信'),
+          //             ),
+          //           ],
+          //         ),
+          //       )
+          //     :
+          Column(
+            children: [
+              // AppBar下の固定バー
+              Container(
+                height: AppBar().preferredSize.height,
+                width: MediaQuery
+                    .of(context)
+                    .size
+                    .width,
+                color: Colors.white,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    ToggleButtons(
+                      color: Colors.blue,
+                      fillColor: Colors.blue[300],
+                      borderColor: Colors.blue[100],
+                      splashColor: Colors.blue[300],
+                      selectedBorderColor: Colors.blue[800],
+                      selectedColor: Colors.white,
+                      borderRadius:
+                      const BorderRadius.all(Radius.circular(10)),
+                      constraints: BoxConstraints(
+                          minHeight: AppBar().preferredSize.height * 0.65,
+                          minWidth: MediaQuery
+                              .of(context)
+                              .size
+                              .width / 5),
+                      isSelected: selectedMode,
+                      onPressed: (int index) {
+                        setState(() {
+                          if (index == 0) {
+                            selectedMode[0] = true;
+                            selectedMode[1] = false;
+                            deleteMode = false;
+                          } else {
+                            selectedMode[0] = false;
+                            selectedMode[1] = true;
+                            deleteMode = true;
+                          }
+                          if (!deleteMode) {
+                            _deleteItems.clear();
+                          }
+                        });
+                      },
+                      children: const [
+                        Row(
+                          children: [Icon(Icons.ios_share), Text('  配信')],
                         ),
-                      ),
-                      DropdownButton(
-                        // 画像ソート順選択
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'new',
-                            child: Text(
-                              '新しい順',
-                              style: TextStyle(
-                                color: Colors.blue,
-                              ),
-                            ),
+                        Row(
+                          children: [Icon(Icons.delete), Text('  削除')],
+                        )
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        const Text(
+                          '表示順：',
+                          style: TextStyle(
+                            color: Colors.blue,
                           ),
-                          DropdownMenuItem(
-                            value: 'old',
-                            child: Text(
-                              '古い順',
-                              style: TextStyle(
-                                color: Colors.blue,
+                        ),
+                        DropdownButton(
+                          // 画像ソート順選択
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'new',
+                              child: Text(
+                                '新しい順',
+                                style: TextStyle(
+                                  color: Colors.blue,
+                                ),
                               ),
                             ),
-                          )
-                        ],
-                        onChanged: (String? value) {
-                          setState(() {
-                            if (sortItemLis != value) {
-                              sortItemLis = value; // 画像順ソートドロップダウンtitle
-                              _items = _items.reversed.toList();
-                              _deleteItems.clear();
-                            }
-                          });
-                        },
-                        value: sortItemLis,
-                        underline: Container(
-                          height: 1,
-                          color: Colors.blue,
+                            DropdownMenuItem(
+                              value: 'old',
+                              child: Text(
+                                '古い順',
+                                style: TextStyle(
+                                  color: Colors.blue,
+                                ),
+                              ),
+                            )
+                          ],
+                          onChanged: (String? value) {
+                            setState(() {
+                              if (sortItemLis != value) {
+                                sortItemLis = value; // 画像順ソートドロップダウンtitle
+                                _items = _items.reversed.toList();
+                                _deleteItems.clear();
+                              }
+                            });
+                          },
+                          value: sortItemLis,
+                          underline: Container(
+                            height: 1,
+                            color: Colors.blue,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
+              Expanded(
+                  child: Center(
+                      child: isLoading
+                          ? AppTheme
+                          .customCircularProgressIndicator() // ローディング中はインジケーターを表示
+                          : Container(
+                          child: _items.isEmpty
+                              ? NonServerPictureMess()
+                              : _createGridView())))
+            ],
+          ),
+          // persistentFooterButtons: deleteMode ? (_deleteItems.isNotEmpty)
+          //         ? [
+          persistentFooterButtons: !isWifiMode && deleteMode &&
+              _deleteItems.isNotEmpty
+              ? [
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _deleteItems = List.from(_items); // すべて選択
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                  fixedSize: const Size(90, 50), //幅,高
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xFF29B6F6)),
+              child: const Text('全選択',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  )),
             ),
-            Expanded(
-                child: Center(
-                    child: isLoading
-                        ? AppTheme
-                        .customCircularProgressIndicator() // ローディング中はインジケーターを表示
-                        : Container(
-                        child: _items.isEmpty
-                            ? NonServerPictureMess()
-                            : _createGridView())))
-          ],
-        ),
-        persistentFooterButtons: deleteMode
-            ? (_deleteItems.isNotEmpty)
-            ? [
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _deleteItems = List.from(_items); // すべて選択
-              });
-            },
-            style: ElevatedButton.styleFrom(
-                fixedSize: const Size(90, 50), //幅,高
-                backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF29B6F6)),
-            child: const Text('全選択',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                )),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _deleteItems.clear(); // すべて解除
-              });
-            },
-            style: ElevatedButton.styleFrom(
-                fixedSize: const Size(125, 50),
-                backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF29B6F6)),
-            child: const Text('全選択解除',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                )),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              for (var item in _deleteItems) {
-                if (kDebugMode) {
-                  print(
-                      'ID: ${item.id}, URL: ${item.url}, Last Modified: ${item
-                          .lastModified}');
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _deleteItems.clear(); // すべて解除
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                  fixedSize: const Size(125, 50),
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xFF29B6F6)),
+              child: const Text('全選択解除',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  )),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                for (var item in _deleteItems) {
+                  if (kDebugMode) {
+                    print(
+                        'ID: ${item.id}, URL: ${item.url}, Last Modified: ${item
+                            .lastModified}');
+                  }
                 }
-              }
-              await showDialog(
-                barrierDismissible: false,
-                context: context,
-                builder: (context) =>
-                    ServerImageDelCheckPopup(
-                        selectDelImage: _deleteItems,
-                        fetchData: fetchData),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-                fixedSize: const Size(50, 50),
-                backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF29B6F6)),
-            child: const Text('削除',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                )),
-          ),
-        ]
-            : null
-            : null,
+                await showDialog(
+                  barrierDismissible: false,
+                  context: context,
+                  builder: (context) =>
+                      ServerImageDelCheckPopup(
+                          selectDelImage: _deleteItems,
+                          fetchData: fetchData),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                  fixedSize: const Size(50, 50),
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xFF29B6F6)),
+              child: const Text('削除',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  )),
+            ),
+          ]
+              : null
+        // : null,
       ),
       // if (isConnected)
       if (isSending)
@@ -619,9 +671,10 @@ class _SendPictureSelect extends State<SendPictureSelect> {
               debugPrint(
                   "■ sending to trustName=${widget.trustName}, IP=${widget
                       .deviceInfo}");
+              sendImagetype(_items[index].url); // 選択して動かす処理
               // callNativeMethod(_items[index].url);//電子ペーパに送るときはここ
               //sendImagePictureBle(_items[index ].url); //BLE通信をしたいときはここ
-              sendImagePictureWifi(_items[index].url); //wifi通信をしたいときはここ
+              //sendImagePictureWifi(_items[index].url); //wifi通信をしたいときはここ
             });
       },
       child: _createCheckMark(index, isSelected),
@@ -786,6 +839,9 @@ class _SendPictureSelect extends State<SendPictureSelect> {
 
   // 選択画像をRBPへ転送する処理
   Future<void> sendImagePictureBle(String url) async {
+    if (widget.trustDevice == null) return;
+    final trust = widget.trustDevice!;
+
     setState(() => isSending = true);
 
     try {
@@ -808,13 +864,16 @@ class _SendPictureSelect extends State<SendPictureSelect> {
       // 接続＆キャラクタリスティック取得
       final device = widget.trustDevice;
       //　接続
-      await device.connect(autoConnect: false);
+      await trust.connect(autoConnect: false);
+      //await device.connect(autoConnect: false);
 
       //追加：MTUを大きくし通信速度を速める
-      await device.requestMtu(185);
+      await trust.requestMtu(185);
+      // await device.requestMtu(185);
 
       //serviceとキャラクタリスティックを探す
-      final services = await device.discoverServices();
+      final services = await trust.discoverServices();
+      // final services = await device.discoverServices();
       final char = services
           .firstWhere((s) => s.uuid == service_UUID)
           .characteristics
@@ -853,7 +912,8 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     } finally {
       // 切断＆ステート更新させるとこ
       try {
-        await widget.trustDevice.disconnect();
+        await trust.disconnect();
+        // await widget.trustDevice.disconnect();
       } catch (_) {}
       setState(() {
         isSending = false;
@@ -884,19 +944,31 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   //   // ファイル名を抽出する際は明示的にしないと送信の際に形式が変わってしまうケースがある。
   //   final String fileName = 'image_${DateTime.now().toIso8601String()}.jpg';
 
-
   // 画像のアップロードだけを担当
   Future<void> _upload(String imageUrl) async {
     final dio = Dio();
-    final file = await (widget.cacheManager ?? DefaultCacheManager()).getSingleFile(imageUrl);
+    final file = await (widget.cacheManager ?? DefaultCacheManager())
+        .getSingleFile(imageUrl);
     final bytes = await file.readAsBytes();
-    final form = FormData.fromMap({'image': MultipartFile.fromBytes(bytes, filename: path.basename(file.path),
+
+
+    // IPアドレスからURLを動的に組み立てる
+    final serverUrl = "http://${widget.ipAddress}:5000/upload";
+
+    final form = FormData.fromMap({
+      'image': MultipartFile.fromBytes(
+        bytes,
+        filename: path.basename(file.path),
         contentType: MediaType('image', 'jpg'),
       ),
     });
 
     //　完了を待つ
-    await dio.post(server_Url, data: form, onSendProgress: (sent, total) {
+    await dio.post(
+      serverUrl,
+      // server_Url,
+      data: form,
+      onSendProgress: (sent, total) {
         setState(() {
           progressPercent = total > 0 ? (sent / total) * 0.9 : 0.0;
         });
@@ -911,7 +983,11 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     Timer.periodic(Duration(milliseconds: 100), (timer) async {
       try {
         //　返答待ち
-        final resp = await Dio().get('http://192.168.200.58:5000/status');
+        //final resp = await Dio().get('http://192.168.200.58:5000/status');
+        final ip = widget.ipAddress ?? '192.168.200.58'; // デフォルト fallback を入れてもOK
+        final statusUrl = 'http://$ip:5000/status';
+
+        final resp = await Dio().get(statusUrl);
         final data = resp.data as Map<String, dynamic>;
         // statusでserverの現状態を取り出す
         final status = data['status'] as String;
@@ -942,10 +1018,17 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     //     isSending = false;
     //   });
     // });
+  }
 
+  void sendImagetype(String imageUrl) {
+    final bool isWifiMode = widget.ipAddress != null;
+    if (isWifiMode) {
+      sendImagePictureWifi(imageUrl);
+    } else {
+      sendImagePictureBle(imageUrl); // ← callNativeMethod()ではなく、こっちに変更
+    }
   }
 }
-
 
 
 //       // リクエストの組み立て

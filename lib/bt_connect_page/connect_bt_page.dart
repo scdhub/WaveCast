@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:iphone_bt_epaper/export-for-e-paper/e_paper_send_picture_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../app_body_color.dart';
 import '../devices_data.dart';
@@ -11,6 +12,7 @@ import '../export-for-e-paper/export_page.dart';
 // import '../main.dart';
 // import '../top_page/top_page.dart';
 // import 'trust-devices_popup.dart';
+import '../theme.dart';
 import 'unregistered_device.dart';
 
 class ConnectBTPage extends StatefulWidget {
@@ -151,20 +153,6 @@ class _ConnectBTPageState extends State<ConnectBTPage> {
       }
     });
 
-    //       // スキャンした情報を格納する
-    //       // scanResult = results;
-    //       devicesList = results.map((r) => r.device).toList();
-    //       // スキャン結果を反映
-    //       scanDevices = devicesList
-    //           .map((device) => ScanDevice(
-    //               scanName: device.platformName,
-    //               scanIpAddress: device.remoteId.toString(),//IPadress
-    //               scanDevicesData: device))
-    //           .toList();
-    //       isScanning = true;
-    //     });
-    //   }
-    // });
 
     //30s経ったら スキャンを停止する
     Future.delayed(const Duration(seconds: 30)).then((_) {
@@ -277,21 +265,6 @@ class _ConnectBTPageState extends State<ConnectBTPage> {
                 ),
               ),
             ),
-            //テキストをスキャンボタンの下に配置
-            // Container(
-            //   color: Colors.white,
-            //   alignment: Alignment.center,
-            //   width: MediaQuery.of(context).size.width,
-            //   height: 25,
-            //   child: const Text(
-            //     '※配信を行うにはデバイス登録後、右アイコンを押下ください。',
-            //     // 'スキャンを開始して、デバイスを登録してください。',
-            //     style: TextStyle(
-            //       color: Colors.red,
-            //       fontSize: 12, fontWeight: FontWeight.bold, // 太字にして強調
-            //     ),
-            //   ),
-            // ),
 
             Container(
               alignment: Alignment.center,
@@ -322,15 +295,26 @@ class _ConnectBTPageState extends State<ConnectBTPage> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => ExportPage(
-                            trustName: trustDevices[index].trustName,
-                            trustIpAddress: trustDevices[index].trustIpAddress,
+                          builder: (_) => SendPictureSelect(
+                          // builder: (_) => ExportPage(
+                            // BLE 用のデバイス情報
+                            deviceInfo: trustDevices[index].devicesData,
                             trustDevice: trustDevices[index].devicesData,
-                            onDelete: () => _removeCounterValue(index),
+                            trustName: trustDevices[index].trustName,
+                            // Wi-Fi 用の IP アドレス
+                            // ipAddress: trustDevices[index].trustIpAddress,
+                            // キャッシュマネージャーが必要なら渡す
+                            // onDelete: () => _removeCounterValue(index),
                           ),
+
                         ),
+
                       );
                     },
+                    onLongPress: () {
+                      _longPressDialog(index); // index を渡す！
+                    },
+
                     child: Container(
                       height: 50,
                       margin: const EdgeInsets.all(5),
@@ -384,28 +368,7 @@ class _ConnectBTPageState extends State<ConnectBTPage> {
                                 ),
                               ]),
                             ),
-                            // IconButton(
-                            //   onPressed: () {
-                            //     // debugPrint("★ ConnectBTPage　： ExportPage : trustName=${trustDevices[index].trustName}, "
-                            //     //     "IP=${trustDevices[index].devicesData}");
-                            //     Navigator.push(
-                            //       context,
-                            //       MaterialPageRoute(
-                            //         // 選択したデバイス名の情報を配信確認画面に渡す。
-                            //         builder: (context) =>
-                            //             ExportPage(
-                            //               trustName: trustDevices[index]
-                            //                   .trustName,
-                            //               trustIpAddress:
-                            //               trustDevices[index].trustIpAddress,
-                            //               trustDevice:
-                            //               trustDevices[index].devicesData,
-                            //               onDelete: () =>
-                            //                   _removeCounterValue(index),
-                            //             ),
-                            //       ),
-                            //     );
-                            //   },
+
 
                             //　アイコンを透明化し、spacebetweenを使って位置を調節
                             Visibility(
@@ -453,6 +416,69 @@ class _ConnectBTPageState extends State<ConnectBTPage> {
           ],
         ),
       ),
+    );
+  }
+
+  void _longPressDialog(int index) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+          title: Text(
+            "確認",
+            style: AppTheme.dialogTitleStyle, //theme.dartのスタイルを使用
+            textAlign: TextAlign.center,
+          ),
+          content: Column(
+              mainAxisSize: MainAxisSize.min, //サイズ調節
+              children: [
+                Text(
+                  '登録を解除しますか？',
+                  style: AppTheme.dialogContentStyle, //theme.dartのスタイルを使用
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 10, // ボタン間の間隔
+                  runSpacing: 10, // 折り返した際の間隔
+                  alignment: WrapAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 100, // ボタンの横幅を制限
+                      child: ElevatedButton(
+                        style:
+                        AppTheme.dialogYesButtonStyle, //theme.dartのスタイルを使用
+                        onPressed: () async {
+                          Navigator.of(context).pop(); // まずダイアログを閉じる
+                          setState(() async {
+                            await _removeCounterValue(index);
+                          });
+                          //   ScaffoldMessenger.of(context).showSnackBar(
+                        },
+                        child: const Text(
+                          "はい",
+                          style: TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 100,
+                      child: ElevatedButton(
+                        style:
+                        AppTheme.dialogNoButtonStyle, //theme.dartのスタイルを使用
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text(
+                          "いいえ",
+                          style: TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+              ])),
     );
   }
 }
