@@ -1,5 +1,5 @@
 // 画像を送信して電子ペーパーに送る処理
-// wifi,ble通信
+// wifi,ble通信を選択。
 
 import 'dart:async';
 import 'dart:convert';
@@ -31,10 +31,9 @@ import '../theme.dart';
 // class SendPictureSelect extends StatefulWidget {
 // final BluetoothDevice deviceInfo;
 // final BluetoothDevice trustDevice;
-//
 // final String trustName;
-//
 // final CacheManager? cacheManager;
+
 // const SendPictureSelect(
 // {super.key,
 // required this.deviceInfo,
@@ -43,27 +42,30 @@ import '../theme.dart';
 // this.cacheManager});
 
 class SendPictureSelect extends StatefulWidget {
+  // BLE通信で必要なもの
   final BluetoothDevice? deviceInfo;
   final BluetoothDevice? trustDevice;
   final String? trustName;
+  // wifi通信で必要なもの
   final String? ipAddress;
+  //　画像などの削除を行う際に必要なキャッシュ削除
   final CacheManager? cacheManager;
 
-
-  const SendPictureSelect({
+  SendPictureSelect({
     Key? key,
     this.deviceInfo,
     this.trustDevice,
     this.trustName,
     this.ipAddress,
     this.cacheManager,
-  }) : assert(
-  // BLEモード or Wi-Fiモードのどちらか一方は必須
-  (ipAddress != null) ||
-      (deviceInfo != null && trustDevice != null && trustName != null),
-  'Either ipAddress (Wi-Fi) or deviceInfo+trustDevice+trustName (BLE) must be provided.'
-  ),
-        super(key: key);
+  }) : super(key: key) {
+    // どんな情報が渡されているのかをチェック、ipaddress=nullで他もすべてnullならエラーで返す
+    if ((ipAddress == null) &&
+        (deviceInfo == null || trustDevice == null || trustName == null)) {
+      throw ArgumentError(
+          'Either ipAddress (Wi-Fi) or deviceInfo+trustDevice+trustName (BLE) must be provided.');
+    }
+  }
 
   @override
   State<StatefulWidget> createState() => _SendPictureSelect();
@@ -98,8 +100,8 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   //_createImageTapの遷移先をsendImagePictureBLEに変更
   //チャンクサイズ
   int chunkSize = 180;
+  int totalSentBytes = 0;
 
-  //　チャンネル登録中（URL）
   //1.PibLE-Bluezero
   // final Guid service_UUID = Guid("12345678-1234-5678-1234-56789abcdef0");
   // final Guid char_UUID = Guid("12345678-1234-5678-1234-56789abcdef1");
@@ -107,20 +109,7 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   //1.PibLE-Bluezero2
   final Guid service_UUID = Guid("12345678-1234-5678-1234-55555abcdef0");
   final Guid char_UUID = Guid("12345678-1234-5678-1234-55555abcdef1");
-  int totalSentBytes = 0;
-
-  //****************************************************************
-
-  //********************* Wi-Fi通信を行う場合 ***************************
-  //_createImageTapの遷移先をsendImagePictureWifiに変更
-  // 今後修正（固定値になっているので）
-  //final String server_Url = "http://192.168.200.58:5000/upload";
-
-  // final String server_Url = "http://192.168.200.36:5000/upload";
-  bool _showIndicator = false;
-  DateTime? _startTime;
-
-  //*****************************************************************
+//********************* BLE通信を行う場合 *************************
 
   //　チャンネル登録中（URL）
   static const platform = MethodChannel('com.example.iphone_bt_epaper/channel');
@@ -319,20 +308,6 @@ class _SendPictureSelect extends State<SendPictureSelect> {
         print('サービス情報を読み取り失敗:$e');
       }
     }
-    /*
-   //ここでSDKサーバーに画像配信要求(画像ID）を発行する。
-   //リクエストに指定する画像IDは「sendImage」で取得できます
-   //　以下のWriteは応答後に行う。
-    //E-Paperの特定のcharacteristicに書き込む
-     try{
-       if (targetCharacteristic != null) {
-      // ここは応答時に実行するコード（書き込むデータはサーバーから取得した変換後のデータを指定）
-         await targetCharacteristic.write('', withoutResponse: false);
-       }
-     }catch(e){
-       print('目的のCharacteristicが見つかりませんでした');
-     }
-    */
     //デバイスとの接続を切る
     //await widget.deviceInfo.disconnect();
     await device.disconnect();
@@ -392,27 +367,7 @@ class _SendPictureSelect extends State<SendPictureSelect> {
               )
             ],
           ),
-          body:
-          // isWifiMode
-          //     //  Wi-Fi モード用 UI ───
-          //     ? Center(
-          //         child: Column(
-          //           mainAxisSize: MainAxisSize.min,
-          //           children: [
-          //             Text('Wi-Fi 送信先: ${widget.ipAddress}'),
-          //             const SizedBox(height: 16),
-          //             ElevatedButton(
-          //               onPressed: () {
-          //                 // ここに「送信実行処理」を書くけどエラー出
-          //
-          //               },
-          //               child: const Text('画像を送信'),
-          //             ),
-          //           ],
-          //         ),
-          //       )
-          //     :
-          Column(
+          body: Column(
             children: [
               // AppBar下の固定バー
               Container(
@@ -671,7 +626,7 @@ class _SendPictureSelect extends State<SendPictureSelect> {
               debugPrint(
                   "■ sending to trustName=${widget.trustName}, IP=${widget
                       .deviceInfo}");
-              sendImagetype(_items[index].url); // 選択して動かす処理
+              sendImageType(_items[index].url); // 選択して動かす処理
               // callNativeMethod(_items[index].url);//電子ペーパに送るときはここ
               //sendImagePictureBle(_items[index ].url); //BLE通信をしたいときはここ
               //sendImagePictureWifi(_items[index].url); //wifi通信をしたいときはここ
@@ -934,16 +889,6 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     _upload(imageUrl).then((_) => _startPolling());
   }
 
-  //
-  // try {
-  //   // まずimageUrl を使ってキャッシュからファイル取得
-  //   final file = await (widget.cacheManager ?? DefaultCacheManager())
-  //       .getSingleFile(imageUrl);
-  //   final imageBytes = await file.readAsBytes();
-  //
-  //   // ファイル名を抽出する際は明示的にしないと送信の際に形式が変わってしまうケースがある。
-  //   final String fileName = 'image_${DateTime.now().toIso8601String()}.jpg';
-
   // 画像のアップロードだけを担当
   Future<void> _upload(String imageUrl) async {
     final dio = Dio();
@@ -954,7 +899,6 @@ class _SendPictureSelect extends State<SendPictureSelect> {
 
     // IPアドレスからURLを動的に組み立てる
     final serverUrl = "http://${widget.ipAddress}:5000/upload";
-
     final form = FormData.fromMap({
       'image': MultipartFile.fromBytes(
         bytes,
@@ -1020,12 +964,15 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     // });
   }
 
-  void sendImagetype(String imageUrl) {
-    final bool isWifiMode = widget.ipAddress != null;
-    if (isWifiMode) {
+  // wifiかBLEか
+  void sendImageType(String imageUrl) {
+    // 通信の判定
+    final bool wifi_or_Ble = widget.ipAddress != null;
+    if (wifi_or_Ble) {
       sendImagePictureWifi(imageUrl);
     } else {
-      sendImagePictureBle(imageUrl); // ← callNativeMethod()ではなく、こっちに変更
+      // ipadressがnullだった場合、BLE通信
+      sendImagePictureBle(imageUrl);
     }
   }
 }

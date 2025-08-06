@@ -98,7 +98,7 @@ class _BlueToothConnectToPageState extends State<BlueToothConnectToPage> {
                           context,
                           MaterialPageRoute(
                             builder: (_) => ConnectWifiPage(
-                              cacheManager: DefaultCacheManager(),
+                              // cacheManager: DefaultCacheManager(),
                             ),
                           ),
                         );

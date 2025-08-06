@@ -10,12 +10,8 @@ import '../theme.dart';
 
 
 class ConnectWifiPage extends StatefulWidget {
-  final CacheManager cacheManager;
 
-  const ConnectWifiPage({
-    Key? key,
-    required this.cacheManager,
-  }) : super(key: key);
+  const ConnectWifiPage({super.key});
 
   @override
   State<ConnectWifiPage> createState() => _ConnectWifiPage();
@@ -31,8 +27,6 @@ final List<String> dummyWiFidata = [
 class _ConnectWifiPage extends State<ConnectWifiPage> {
   // ここで登録したサーバーを保存し、リストに表示させる。
   List<String> savedServers = [];
-  // サーバー情報
-  // static const Key = 'saved_servers';
   // TextFiledの値を更新や初期化を行う
   final _saveController = TextEditingController();
 
@@ -96,14 +90,14 @@ class _ConnectWifiPage extends State<ConnectWifiPage> {
                     // deviceInfo: widget.deviceInfo,
                     // trustDevice: widget.trustDevice,
                     // trustName: widget.trustName,
-                    cacheManager: widget.cacheManager,
+                    // cacheManager: widget.cacheManager,
                     ipAddress: savedServers[index],
                   )));
                   },
 
                 //長押し
                 onLongPress: () {
-                  _longPressDialog(index); // index を渡す！
+                  _longPressDialog(index); // index をダイアログに渡す
                 },
               );
             }
