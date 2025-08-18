@@ -31,6 +31,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
+	<key>NNSPhotoLibraryAddUsageDescription</key>
 	<string>In order to access your photo library</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
