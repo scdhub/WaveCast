@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:convert';
 // import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -145,6 +146,25 @@ class _SendPictureSelect extends State<SendPictureSelect> {
       await handleReceivedMessage(message);
       return "";
     });
+  }
+
+  //　Wi-Fi 経由でサーバーが応答可能か
+  Future<bool> checkWifiReady(String ipAddress) async {
+    if (ipAddress.isEmpty) return false;
+    try {
+      print('[checkWifiReady] サーバー接続確認中: $ipAddress');
+      final socket = await Socket.connect(
+        ipAddress,
+        5000,
+        timeout: const Duration(milliseconds: 350),
+      );
+      socket.destroy();
+      print('[checkWifiReady] サーバー接続OK');
+      return true;
+    } catch (e) {
+      print('[checkWifiReady] サーバー接続NG: $e');
+      return false;
+    }
   }
 
   // メッセージ受信後の処理
@@ -684,8 +704,8 @@ class _SendPictureSelect extends State<SendPictureSelect> {
       barrierDismissible: false, //dialog以外の部分をタップしても消えないようにする。
       context: parentContext, // 親の context を使ってダイアログを開く
       // context: context,
-        builder: (BuildContext dialogContext) {
-      // builder: (context) {
+      builder: (BuildContext dialogContext) {
+        // builder: (context) {
         return AlertDialog(
           title: Align(
             alignment: Alignment.center, // タイトルを中央に寄せる
@@ -721,18 +741,19 @@ class _SendPictureSelect extends State<SendPictureSelect> {
                         child: ElevatedButton(
                           style: AppTheme.dialogYesButtonStyle,
                           onPressed: () async {
-                            //先にダイアログは閉じておく
                             Navigator.of(dialogContext).pop();
-                            final ok =
-                                await checkWifiConnection(widget.ipAddress);
-                            if (ok) {
+
+                            final Ok =
+                                await checkWifiReady(widget.ipAddress ?? '');
+
+                            if (Ok) {
+                              // 接続 OK
                               onSendOK();
                               if (!mounted) return;
-                              setState(() {
-                                isConnected = true;
-                              });
+                              setState(() => isConnected = true);
                             } else {
-                              _noWfiConnectionDialog(parentContext);
+                              // 接続 NG -> 親 context でエラーダイアログ
+                              _noConnectionDialog(parentContext);
                             }
                             // Navigator.pop(context);
                           },
@@ -809,23 +830,20 @@ class _SendPictureSelect extends State<SendPictureSelect> {
           .getSingleFile(url);
       final imageBytes = await file.readAsBytes();
       //ここで画像取得に失敗したり大きすぎる画像で落ちる可能性を救える。　リサイズしているから必要ない？
-      print('[デバック] 画像取得完了: ${file.path}, サイズ: ${imageBytes
-          .length} bytes');
+      print('[デバック] 画像取得完了: ${file.path}, サイズ: ${imageBytes.length} bytes');
 
       final headerBytes = imageBytes.sublist(0, 10);
       print('ファイルの先頭バイト: $headerBytes');
 
       //　計測開始、処理終わるところに停止を置いてるので差をprint
-      final stopwatch = Stopwatch()
-        ..start();
-
+      final stopwatch = Stopwatch()..start();
 
       //　バイト列 + EOF
       final payload = imageBytes;
       // final eof = utf8.encode('<<EOF>>');
       //あとで落ちたときにどこまで遅れたか追跡ができるようにする
-      print('[デバック] BLE描画開始: total ${payload
-          .length} bytes, chunkSize=$chunkSize');
+      print(
+          '[デバック] BLE描画開始: total ${payload.length} bytes, chunkSize=$chunkSize');
 
       // 接続＆キャラクタリスティック取得
       final device = widget.trustDevice;
@@ -854,7 +872,6 @@ class _SendPictureSelect extends State<SendPictureSelect> {
         //ここで落ちる場合もあるのでログを残す
         print('[デバック] chunk [$offset..$end) = ${chunk.length} bytes');
 
-
         //　バイト数計算
         await char.write(chunk, withoutResponse: true);
         totalSentBytes += chunk.length;
@@ -874,12 +891,11 @@ class _SendPictureSelect extends State<SendPictureSelect> {
       final elapsedMs = stopwatch.elapsed.inMilliseconds;
       final minutes = elapsedMs ~/ 60000;
       final seconds = (elapsedMs % 60000) ~/ 1000;
-      debugPrint(
-          '送信完了までの時間: ${minutes}分${seconds}秒（${elapsedMs} ms）');
+      debugPrint('送信完了までの時間: ${minutes}分${seconds}秒（${elapsedMs} ms）');
       // } catch (e) {
       //   debugPrint('送信中エラー: $e');
       //エラーが発生した際に、エラーの内容とエラーが発生した場所を出力する
-    }catch (e, stack) {
+    } catch (e, stack) {
       debugPrint('[エラー] 送信中に例外発生: $e');
       debugPrint(stack.toString());
     } finally {
@@ -959,7 +975,7 @@ class _SendPictureSelect extends State<SendPictureSelect> {
           timer.cancel();
           _onDisplayDone(elapsed);
         }
-      } catch (e,stack) {
+      } catch (e, stack) {
         //　ここで進捗インジケータを非表示
         timer.cancel();
         setState(() => isSending = false);
@@ -999,32 +1015,33 @@ class _SendPictureSelect extends State<SendPictureSelect> {
 
   //wi-fiにつながっているか確認するところ
   //ソケット通信
-  Future<bool> checkWifiConnection(String? ipAddress) async {
+  Future<bool> checkConnection(String? ipAddress) async {
     if (ipAddress == null) return false;
     try {
       // タイムアウトは必要（一般的なWi-Fi：500〜1000 ms）
-      final socket = await Socket.connect //ここでサーバーへ確認　返答有無をここで確かめる。なければタイムアウトして終わり
-        (ipAddress, 5000, timeout: const Duration(milliseconds: 350));
+      final socket =
+          await Socket.connect //ここでサーバーへ確認　返答有無をここで確かめる。なければタイムアウトして終わり
+              (ipAddress, 5000, timeout: const Duration(milliseconds: 350));
       socket.destroy(); //ソケットを即座に閉じ、接続を強制的に切断
       return true;
-    } catch (_) { //ソケット通信ができなかった。
+    } catch (_) {
+      //ソケット通信ができなかった。
       return false;
     }
   }
 }
 
 //wifiチェックではじかれた場合
-void _noWfiConnectionDialog(BuildContext context) {
+void _noConnectionDialog(BuildContext context) {
   showDialog(
     context: context,
     builder: (BuildContext context) {
       return AlertDialog(
         title: Center(
-        child: Text(
-          'エラー',
-          style: AppTheme.errordialogTitleStyle,
-
-        ),
+          child: Text(
+            'エラー',
+            style: AppTheme.errordialogTitleStyle,
+          ),
         ),
         content: Padding(
           padding: const EdgeInsets.all(8.0),
@@ -1035,20 +1052,10 @@ void _noWfiConnectionDialog(BuildContext context) {
               crossAxisAlignment: CrossAxisAlignment.center, // 横方向も中央揃え
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Text(
-                //   'wi-fiがつながっていません。',
-                //   style: AppTheme.errorContentStyle, // エラーメッセージの本文スタイル
-                //   textAlign: TextAlign.center, // テキストを中央揃え
-                // ),
-                // const SizedBox(height: 8),
                 Text(
-                  '画像配信できません。下記を確認してください。\n\n'
-                      '•Wi-Fiを接続しているか\n'
-                      '•接続先IPが正しいか\n'
-                      '•サーバが起動しているか\n',
+                  'wi-fiがつながっていません。端末のWi-FiをONにして再度配信をしてください。',
                   style: AppTheme.errorContentStyle, // エラーメッセージの本文スタイル
                   textAlign: TextAlign.center, // テキストを中央揃え
-
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton(
