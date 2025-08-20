@@ -107,10 +107,11 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   // final Guid service_UUID = Guid("12345678-1234-5678-1234-56789abcdef0");
   // final Guid char_UUID = Guid("12345678-1234-5678-1234-56789abcdef1");
 
-  //1.PibLE-Bluezero2
+  //2.PibLE-Bluezero2
   final Guid service_UUID = Guid("12345678-1234-5678-1234-55555abcdef0");
   final Guid char_UUID = Guid("12345678-1234-5678-1234-55555abcdef1");
-//********************* BLE通信を行う場合 *************************
+
+//*****************************************************************
 
   //　チャンネル登録中（URL）
   static const platform = MethodChannel('com.example.iphone_bt_epaper/channel');
@@ -148,21 +149,35 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     });
   }
 
-  //　Wi-Fi 経由でサーバーが応答可能か
   Future<bool> checkWifiReady(String ipAddress) async {
     if (ipAddress.isEmpty) return false;
+
+    // 最初、直接ソケットでサーバー (port 5000) に接続を試みる
     try {
-      print('[checkWifiReady] サーバー接続確認中: $ipAddress');
+      debugPrint(
+          '[checkWifiReady] direct connect try: $ipAddress:5000 (350ms)');
+      //　ソケット通信中
       final socket = await Socket.connect(
         ipAddress,
         5000,
         timeout: const Duration(milliseconds: 350),
       );
+      //　ソケット通信を閉じる
       socket.destroy();
-      print('[checkWifiReady] サーバー接続OK');
+      debugPrint('[checkWifiReady] direct connect OK (350ms)');
       return true;
     } catch (e) {
-      print('[checkWifiReady] サーバー接続NG: $e');
+      debugPrint('[checkWifiReady2] direct connect failed (350ms): $e');
+    }
+
+    // サーバーに到達できなかった場合、補助的に接続タイプを取得
+    try {
+      final status = await Connectivity().checkConnectivity();
+      debugPrint('[checkWifiReady] connectivity_plus result: $status');
+      // 補助情報として返す（ここではサーバー未到達なので false）
+      return false;
+    } catch (e) {
+      debugPrint('[checkWifiReady] connectivity_plus check error: $e');
       return false;
     }
   }
@@ -743,17 +758,31 @@ class _SendPictureSelect extends State<SendPictureSelect> {
                           onPressed: () async {
                             Navigator.of(dialogContext).pop();
 
-                            final Ok =
-                                await checkWifiReady(widget.ipAddress ?? '');
+                            // 現在のモード判定（IPがセットされているか）
+                            final bool isWifiMode = (widget.ipAddress != null &&
+                                widget.ipAddress!.isNotEmpty);
 
-                            if (Ok) {
-                              // 接続 OK
+                            if (isWifiMode) {
+                              // Wi-Fiモードならサーバー到達性を確認
+                              final ok =
+                                  await checkWifiReady(widget.ipAddress ?? '');
+                              if (ok) {
+                                // 接続 OK -> 送信開始
+                                onSendOK();
+                                if (!mounted) return;
+                                setState(() => isConnected = true);
+
+                                // 接続ができないならエラーダイアログ
+                              } else {
+                                _noConnectionDialog(parentContext);
+                              }
+                              // BLEモードだったらWi-Fiチェックをスキップして直接送信
+                            } else {
+                              debugPrint(
+                                  '[デバック] BLE mode: Wi-Fiのチェックをせず、そのまま送信');
                               onSendOK();
                               if (!mounted) return;
                               setState(() => isConnected = true);
-                            } else {
-                              // 接続 NG -> 親 context でエラーダイアログ
-                              _noConnectionDialog(parentContext);
                             }
                             // Navigator.pop(context);
                           },
@@ -1016,18 +1045,9 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   //wi-fiにつながっているか確認するところ
   //ソケット通信
   Future<bool> checkConnection(String? ipAddress) async {
-    if (ipAddress == null) return false;
-    try {
-      // タイムアウトは必要（一般的なWi-Fi：500〜1000 ms）
-      final socket =
-          await Socket.connect //ここでサーバーへ確認　返答有無をここで確かめる。なければタイムアウトして終わり
-              (ipAddress, 5000, timeout: const Duration(milliseconds: 350));
-      socket.destroy(); //ソケットを即座に閉じ、接続を強制的に切断
-      return true;
-    } catch (_) {
-      //ソケット通信ができなかった。
-      return false;
-    }
+    if (ipAddress == null || ipAddress.isEmpty) return false;
+    // 内部は上の checkWifiReady と同じ挙動に合わせる
+    return await checkWifiReady(ipAddress);
   }
 }
 
@@ -1073,48 +1093,6 @@ void _noConnectionDialog(BuildContext context) {
     },
   );
 }
-
-//       // リクエストの組み立て
-//       final uri = Uri.parse(server_Url);
-//       final request = http.MultipartRequest('POST', uri)
-//         ..files.add(
-//           http.MultipartFile.fromBytes(
-//             'image',
-//             imageBytes,
-//             filename: fileName, // 明示的に .jpg をつけないとandroidは.octet-streamで飛ばされる
-//              // contentType: MediaType('image', 'bmp'),
-//             contentType: MediaType('image', 'jpg'),
-//           ),
-//         );
-//
-//       // 画像を送信する（リクエスト送信）
-//       final streamedResponse = await request.send();
-//
-//       //以下は成功失敗、インジケーターの停止などのUI側処理
-//       // ステースチェックを行う
-//       if (streamedResponse.statusCode == 200) {
-//         debugPrint(" Wi‑Fi通信に成功しました");
-//       } else {
-//         debugPrint(" Wi‑Fi通信に失敗しました: ${streamedResponse.statusCode}");
-//       }
-//     } catch (e) {
-//       debugPrint(" Wi‑Fi 通信エラー: $e");
-//       // _countdownTimer?.cancel();
-//       // setState(() => _showIndicator = false);｝｝
-//     } finally {
-//       setState(() => isSending = false);
-//     }
-//     try {
-//       await widget.trustDevice.disconnect();
-//     } catch (_) {}
-//     setState(() {
-//       isSending = false;
-//       isConnected = false;
-//       connectionState = 'disconnect';
-//       // progressPercent = 0.0;
-//     });
-//   }
-// }
 
 class NonServerPictureMess extends StatelessWidget {
   const NonServerPictureMess({super.key});
