@@ -1,6 +1,10 @@
 package com.example.iphone_bt_epaper
 
 import android.os.Bundle
+//wifi判定用
+import android.content.Context
+import android.net.wifi.WifiManager
+
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -19,6 +23,9 @@ import android.util.Log // Log出力用
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.example.iphone_bt_epaper/channel"
+    // wifi判定のチャンネル
+    private val WIFI_CHANNEL = "com.example.wifi/helper"
+
     var sdk: EInkSDK? = null
     var deviceName: String? = null
     var imageUrl: String? = null
@@ -55,6 +62,8 @@ class MainActivity: FlutterActivity() {
 
             }, 0)
         }
+
+
 
 //        fun updateValues(values: Map<String, Any?>) {
 //            for ((key, newValue) in values) {
@@ -176,6 +185,77 @@ class MainActivity: FlutterActivity() {
                 sendMessageToFlutter(messageChannel, "onSendImageToDeviceProgress", "SendImage", progressPercent)
             }
         }
+
+        //　接続やwifiの判定を行うときのメソッド
+        MethodChannel(flutterEngine!!.dartExecutor.binaryMessenger, WIFI_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "checkWifiReady" -> {
+                        try {
+                            // ON/OFF や接続情報（SSID, IP）を取れる
+                            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+
+                            if (wifiManager.isWifiEnabled) {
+                                // Wi-Fi が ON
+                                Log.d("★WiFiCheck", "Wi-Fi は有効です")
+                            } else {
+                                // Wi-Fi が OFF
+                                Log.d("☆WiFiCheck", "Wi-Fi は無効です")
+                            }
+
+                            //データを管理する連想配列
+                            val map = HashMap<String, Any?>()
+
+                            //　ここでOFFなら結果返して処理終了
+                            if (!wifiManager.isWifiEnabled) {
+                                map["status"] = "WIFI_OFF"
+                                result.success(map)
+                                Log.d("MainActivity", "wifi: $map")
+                                return@setMethodCallHandler
+                            }
+
+                            //　wi-fiがonで情報を取得できた場合
+                            val info = wifiManager.connectionInfo
+                            val rawSsid = info?.ssid ?: ""
+                            val ssid = rawSsid.removePrefix("\"").removeSuffix("\"") // normalize
+
+                            // ipAddress を取得し文字列へ変換する
+                            val ipInt = info?.ipAddress ?: 0
+                            fun intToIp(ip: Int): String {
+                                return if (ip == 0) "" else
+                                    "${ip and 0xff}.${ip shr 8 and 0xff}.${ip shr 16 and 0xff}.${ip shr 24 and 0xff}"
+                            }
+                            val ipString = intToIp(ipInt)
+
+                            //　上記結果からipアドレスを取得
+                            map["status"] = if (ipString.isEmpty()) "NO_IP" else "READY"
+                            // 接続中のwifiのIPとssidを取得しmapに結果を返す
+                            map["ssid"] = ssid
+                            map["ip"] = ipString
+
+                            result.success(map)
+
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "checkWifiReady error", e)
+                            val err = HashMap<String, Any?>()
+                            err["status"] = "ERROR"
+                            err["message"] = e.message
+                            result.success(err)
+                        }
+                    }
+//                    // 最初のwifi判定のコード
+//                    "isWifiEnabled" -> {
+//                        try {
+//                            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+//                            result.success(wifiManager.isWifiEnabled)
+//                        } catch (e: Exception) {
+//                            result.error("ERR_WIFI", e.message, null)
+//                        }
+//                    }
+//
+//                    else -> result.notImplemented()
+                }
+            }
 
         MethodChannel(flutterEngine!!.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             if (call.method == "callSdk") {

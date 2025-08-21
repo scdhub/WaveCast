@@ -115,6 +115,7 @@ class _SendPictureSelect extends State<SendPictureSelect> {
 
   //　チャンネル登録中（URL）
   static const platform = MethodChannel('com.example.iphone_bt_epaper/channel');
+  static const wifiplatform = MethodChannel('com.example.wifi/helper');
 
   // SDKcallback_message
   static const BasicMessageChannel<String> _channel =
@@ -149,10 +150,78 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     });
   }
 
+  // Wi-Fi 状態を問い合わせる
+  Future<Map<String, dynamic>> checkWifiStatusNative() async {
+    try {
+      final res = await wifiplatform.invokeMethod<dynamic>('checkWifiReady');
+      if (res == null) return {'status': 'UNKNOWN'};
+
+      if (res is Map) {
+        return Map<String, dynamic>.from(res);
+      }
+      // まれに JSON 文字列が返る場合があるためフォールバックを使用
+      if (res is String) {
+        try {
+          return jsonDecode(res) as Map<String, dynamic>;
+        } catch (_) {
+          return {'status': 'UNKNOWN', 'raw': res};
+        }
+      }
+      return {'status': 'UNKNOWN'};
+    } on PlatformException catch (e) {
+      debugPrint('[checkWifiStatusNative] PlatformException: ${e.message}');
+      return {'status': 'ERROR', 'message': e.message};
+    } catch (e) {
+      debugPrint('[checkWifiStatusNative] error: $e');
+      return {'status': 'ERROR', 'message': e.toString()};
+    }
+  }
+
+  // サーバへのソケット接続を試み、結果と失敗時はエラーメッセージを返す
+  Future<Map<String, dynamic>> checkServerReachable(String ip,
+      {int port = 5000,
+      Duration timeout = const Duration(milliseconds: 350)}) async {
+    try {
+      //　socket.connectでソケット通信を行う
+      final socket = await Socket.connect(ip, port, timeout: timeout);
+      socket.destroy();
+      return {'ok': true};
+
+    } on SocketException catch (e) {
+      return {
+        'ok': false,
+        'error': 'SocketException: ${e.message}',
+        'type': 'socket'
+      };
+    } on TimeoutException catch (e) {
+      return {
+        'ok': false,
+        'error': 'TimeoutException: ${e.message}',
+        'type': 'timeout'
+      };
+    } catch (e) {
+      return {'ok': false, 'error': e.toString(), 'type': 'unknown'};
+    }
+  }
+
+  // ネイティブ経由で Wi-Fi ON/OFF を取得する（引数無し）
+  Future<bool> checkWifiEnabled() async {
+    try {
+      final result = await wifiplatform.invokeMethod<bool>('isWifiEnabled');
+      return result ?? false;
+    } on PlatformException catch (e) {
+      debugPrint('[デバック] PlatformException: ${e.message}');
+      return false;
+    } catch (e) {
+      debugPrint('[デバック] unknown error: $e');
+      return false;
+    }
+  }
+
   Future<bool> checkWifiReady(String ipAddress) async {
     if (ipAddress.isEmpty) return false;
 
-    // 最初、直接ソケットでサーバー (port 5000) に接続を試みる
+    // 最初、直接ソケットでサーバー に接続を試みる
     try {
       debugPrint(
           '[checkWifiReady] direct connect try: $ipAddress:5000 (350ms)');
@@ -167,17 +236,17 @@ class _SendPictureSelect extends State<SendPictureSelect> {
       debugPrint('[checkWifiReady] direct connect OK (350ms)');
       return true;
     } catch (e) {
-      debugPrint('[checkWifiReady2] direct connect failed (350ms): $e');
+      debugPrint('[checkWifiReady] direct connect failed (350ms): $e');
     }
 
     // サーバーに到達できなかった場合、補助的に接続タイプを取得
     try {
       final status = await Connectivity().checkConnectivity();
-      debugPrint('[checkWifiReady] connectivity_plus result: $status');
+      debugPrint('[checkWifiReady2] connectivity_plus result: $status');
       // 補助情報として返す（ここではサーバー未到達なので false）
       return false;
     } catch (e) {
-      debugPrint('[checkWifiReady] connectivity_plus check error: $e');
+      debugPrint('[checkWifiReady2] connectivity_plus check error: $e');
       return false;
     }
   }
@@ -758,32 +827,78 @@ class _SendPictureSelect extends State<SendPictureSelect> {
                           onPressed: () async {
                             Navigator.of(dialogContext).pop();
 
-                            // 現在のモード判定（IPがセットされているか）
+                            // 現在のモード判定（IPがセットされているか確認する。BLEはスキップする）
                             final bool isWifiMode = (widget.ipAddress != null &&
                                 widget.ipAddress!.isNotEmpty);
 
-                            if (isWifiMode) {
-                              // Wi-Fiモードならサーバー到達性を確認
-                              final ok =
-                                  await checkWifiReady(widget.ipAddress ?? '');
-                              if (ok) {
-                                // 接続 OK -> 送信開始
-                                onSendOK();
-                                if (!mounted) return;
-                                setState(() => isConnected = true);
-
-                                // 接続ができないならエラーダイアログ
-                              } else {
-                                _noConnectionDialog(parentContext);
-                              }
-                              // BLEモードだったらWi-Fiチェックをスキップして直接送信
-                            } else {
+                            // wifiのreturnがfalseで返ってくる
+                            if (!isWifiMode) {
+                              // wifiなし
                               debugPrint(
                                   '[デバック] BLE mode: Wi-Fiのチェックをせず、そのまま送信');
                               onSendOK();
+                              //　非同期の場合、画面が破棄されていないかここでチェックする
                               if (!mounted) return;
                               setState(() => isConnected = true);
+                              return;
                             }
+
+                            // ネイティブに Wi-Fi 状態を問い合わせて、接続できるか確認する
+                            final wifiInfo = await checkWifiStatusNative();
+                            final status =
+                                (wifiInfo['status'] ?? 'UNKNOWN').toString();
+                            debugPrint('[★★....selectImageCheckDialog] native wifi status: $status, info: $wifiInfo');
+
+                            //　結果を返してもらい、ダイアログへ反映
+                            if (status == 'ERROR') {
+                              final msg = wifiInfo['message'] ?? 'エラー';
+                              _showErrorDialog(parentContext,
+                                  'Wi-Fi チェック失敗',
+                                  'ネイティブの Wi-Fi チェックでエラーが発生しました:\n$msg');
+                              return;
+                            }
+
+                            //　ダイアログ表示させて処理終了
+                            if (status == 'WIFI_OFF') {
+                              _showErrorDialog(parentContext,
+                                  'Wi-FiがOFF',
+                                  '端末のWi-FiがOFFになっています。Wi-FiをONにして再度お試しください。');
+                              return;
+                            }
+
+                            //　接続先のIPが違っていた場合
+                            if (status == 'NO_IP') {
+                              final ssid = wifiInfo['ssid'] ?? '(unknown)';
+                              _showErrorDialog(parentContext,
+                                  'IP未取得',
+                                  '端末はSSID $ssid に接続していますが IP を取得できていません。DHCP やルーター設定を確認してください。');
+                              return;
+                            }
+
+                            // wi-fiiがONでIPが取得できた場合
+                            if (status == 'READY' || status == 'OK') {
+                              final ip = widget.ipAddress ?? '';
+                              //ソケット通信でサーバの状態を確認
+                              final serverCheck =
+                                  await checkServerReachable(ip);
+                              if (serverCheck['ok'] == true) {
+                                // 結果が返ってきて、接続が成功すると、送信開始
+                                onSendOK();
+                                if (!mounted) return;
+                                setState(() => isConnected = true);
+                                return;
+                              } else {
+                                // サーバー接続失敗。原因をユーザーに見せる（SocketException / Timeout 等）
+                                final err = serverCheck['error'] ?? '接続失敗';
+                                _showErrorDialog(parentContext, 'サーバー接続失敗',
+                                    'サーバー ($ip:5000) へ接続できませんでした。\n\n原因: $err\n端末のネットワークまたはサーバー側を確認してください。');
+                                return;
+                              }
+                            }
+
+                            // それ以外（UNKNOWN 等）
+                            _showErrorDialog(parentContext, 'Wi-Fi 状態不明',
+                                'Wi-Fi の状態を判定できませんでした。端末設定を確認してください。');
                             // Navigator.pop(context);
                           },
                           child: const Text("はい",
@@ -1051,48 +1166,35 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   }
 }
 
-//wifiチェックではじかれた場合
-void _noConnectionDialog(BuildContext context) {
+void _showErrorDialog(BuildContext ctx, String title, String message) {
   showDialog(
-    context: context,
+    context: ctx,
     builder: (BuildContext context) {
       return AlertDialog(
-        title: Center(
-          child: Text(
-            'エラー',
-            style: AppTheme.errordialogTitleStyle,
-          ),
-        ),
-        content: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: SizedBox(
-            width: 250, // ダイアログの幅
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center, // 中央揃え
-              crossAxisAlignment: CrossAxisAlignment.center, // 横方向も中央揃え
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'wi-fiがつながっていません。端末のWi-FiをONにして再度配信をしてください。',
-                  style: AppTheme.errorContentStyle, // エラーメッセージの本文スタイル
-                  textAlign: TextAlign.center, // テキストを中央揃え
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  style: AppTheme.errordialogButtonStyle, // OKボタンのスタイル
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
+        title:
+            Center(child: Text(title, style: AppTheme.errordialogTitleStyle)),
+        content: SizedBox(
+          width: 320,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(message,
+                  style: AppTheme.errorContentStyle,
+                  textAlign: TextAlign.center),
+              const SizedBox(height: 18),
+              ElevatedButton(
+                style: AppTheme.errordialogButtonStyle,
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
           ),
         ),
       );
     },
   );
 }
+
 
 class NonServerPictureMess extends StatelessWidget {
   const NonServerPictureMess({super.key});
