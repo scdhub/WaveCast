@@ -243,7 +243,7 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     try {
       final status = await Connectivity().checkConnectivity();
       debugPrint('[checkWifiReady2] connectivity_plus result: $status');
-      // 補助情報として返す（ここではサーバー未到達なので false）
+      //ここではサーバー未到達なのでfalseを返す
       return false;
     } catch (e) {
       debugPrint('[checkWifiReady2] connectivity_plus check error: $e');
@@ -362,7 +362,7 @@ class _SendPictureSelect extends State<SendPictureSelect> {
 
   //サーバー接続
   Future onDiscoverServicesPressed({required String sendImage}) async {
-    // Wi-Fi モードでは呼ばれないようにガード
+    // Wi-Fi モードでは呼ばれないようにガードしておく
     if (widget.deviceInfo == null || widget.trustDevice == null) return;
 
     // 以降は必ず non-null なので `!` で取得
@@ -722,8 +722,6 @@ class _SendPictureSelect extends State<SendPictureSelect> {
                         "■ sending to trustName=${widget.trustName}, IP=${widget.deviceInfo}");
                     sendImageType(_items[index].url); // 選択して動かす処理
                     // callNativeMethod(_items[index].url);//電子ペーパに送るときはここ
-                    //sendImagePictureBle(_items[index ].url); //BLE通信をしたいときはここ
-                    //sendImagePictureWifi(_items[index].url); //wifi通信をしたいときはここ
                   });
             },
       child: _createCheckMark(index, isSelected),
@@ -1167,12 +1165,13 @@ class _SendPictureSelect extends State<SendPictureSelect> {
 }
 
 void _showErrorDialog(BuildContext ctx, String title, String message) {
+  const unifiedTitle = 'エラー'; // エラーで固定させているが、不要なら消す
   showDialog(
     context: ctx,
     builder: (BuildContext context) {
       return AlertDialog(
         title:
-            Center(child: Text(title, style: AppTheme.errordialogTitleStyle)),
+            Center(child: Text(unifiedTitle, style: AppTheme.errordialogTitleStyle)),
         content: SizedBox(
           width: 320,
           child: Column(
