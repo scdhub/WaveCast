@@ -74,13 +74,9 @@ class _BlueToothConnectToPageState extends State<BlueToothConnectToPage> {
         onPressed: () async {
           // 位置情報のパーミッションを投げる
           await requestLocationPermission();
-          // Navigator.push(
-          //   context,
-          //   MaterialPageRoute(
-          //       builder: (context) => const ConnectBTPage()), //BT接続画面に遷移
-          // );
           showDialog(
             context: context,
+            barrierDismissible: false,
             builder: (context) {
               return SimpleDialog(
                   insetPadding: const EdgeInsets.symmetric(horizontal: 40.0),

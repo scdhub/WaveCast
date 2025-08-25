@@ -190,6 +190,7 @@ class MainActivity: FlutterActivity() {
         MethodChannel(flutterEngine!!.dartExecutor.binaryMessenger, WIFI_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+                    //　androidstudio側から呼び出し
                     "checkWifiReady" -> {
                         try {
                             // ON/OFF や接続情報（SSID, IP）を取れる
@@ -211,6 +212,7 @@ class MainActivity: FlutterActivity() {
                                 map["status"] = "WIFI_OFF"
                                 result.success(map)
                                 Log.d("MainActivity", "wifi: $map")
+                                // 何か条件で処理を中断したい場合
                                 return@setMethodCallHandler
                             }
 
@@ -243,17 +245,6 @@ class MainActivity: FlutterActivity() {
                             result.success(err)
                         }
                     }
-//                    // 最初のwifi判定のコード
-//                    "isWifiEnabled" -> {
-//                        try {
-//                            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-//                            result.success(wifiManager.isWifiEnabled)
-//                        } catch (e: Exception) {
-//                            result.error("ERR_WIFI", e.message, null)
-//                        }
-//                    }
-//
-//                    else -> result.notImplemented()
                 }
             }
 
