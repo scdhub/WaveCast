@@ -973,20 +973,22 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     if (widget.trustDevice == null) return;
     final trust = widget.trustDevice!;
 
-    setState(() => isSending = true);
-
-    // デバイス接続状態をローカルで追うフラグ + サブスク
-    bool deviceConnected = false;
-    StreamSubscription<BluetoothDeviceState>? stateSub;
-
     try {
       // 画像取得：指定された URL のファイルを取得
       final file = await (widget.cacheManager ?? DefaultCacheManager())
           .getSingleFile(url)
-    .timeout(const Duration(seconds: 3));
+    .timeout(const Duration(seconds: 1));
       final imageBytes = await file.readAsBytes();
 
       if (imageBytes.isEmpty) {
+        // 即 UI を戻してからダイアログ
+        if (mounted) {
+          setState(() {
+            isSending = false;
+            isConnected = false;
+            progressPercent = 0.0;
+          });
+        }
         throw Exception('画像データが空です。');
       }
 
@@ -1005,7 +1007,10 @@ class _SendPictureSelect extends State<SendPictureSelect> {
       final device = widget.trustDevice;
       //　接続時　ここで問題が起きたら接続エラー
       try {
-        await trust.connect(autoConnect: false);
+        await trust.connect(autoConnect: false)
+        //secounds:1にしたら接続エラーになった。
+            .timeout(const Duration(seconds: 2));
+        if (mounted) setState(() => isConnected = true);
       } on Exception catch (e) {
         debugPrint('[エラー] connect failed: $e');
         _showBleErrorDialog(context, 'unused', 'BLEデバイスに接続できませんでした。\n再度お試しください。');
@@ -1020,10 +1025,21 @@ class _SendPictureSelect extends State<SendPictureSelect> {
       //serviceとキャラクタリスティックを探す
       late BluetoothCharacteristic char;
       try {
-        final services = await trust.discoverServices();
+        final services = await trust.discoverServices()
+            .timeout(const Duration(seconds: 2));
         final service = services.firstWhere((s) => s.uuid == service_UUID, orElse: () => throw Exception('サービスが見つかりません'));
         char = service.characteristics.firstWhere((c) => c.uuid == char_UUID, orElse: () => throw Exception('キャラクタリスティックが見つかりません'));
       } on Exception catch (e) {
+        if (imageBytes.isEmpty) {
+          // 即 UI を戻してからダイアログ
+          if (mounted) {
+            setState(() {
+              isSending = false;
+              isConnected = false;
+              progressPercent = 0.0;
+            });
+          }
+        }
         debugPrint('[エラー] service/char discovery failed: $e');
         _showBleErrorDialog(context, 'unused', 'キャラクタリスティックの取得に失敗しました。\n接続先を確認してください。');
         return;
@@ -1043,6 +1059,14 @@ class _SendPictureSelect extends State<SendPictureSelect> {
           await char.write(chunk, withoutResponse: true);
           totalSentBytes += chunk.length;
         } on Exception catch (e){
+          // 即 UI を戻してからダイアログ
+          if (mounted) {
+            setState(() {
+              isSending = false;
+              isConnected = false;
+              progressPercent = 0.0;
+            });
+          }
           debugPrint('[エラー] write failed at $offset: $e');
           _showBleErrorDialog(context, 'unused', '画像送信中にエラーが発生しました。\n再接続して再試行してください。');
           return;
@@ -1071,10 +1095,18 @@ class _SendPictureSelect extends State<SendPictureSelect> {
       //エラーが発生した際に、エラーの内容とエラーが発生した場所を出力する
     } catch (e, stack) {
       debugPrint('[エラー] 送信中に例外発生: $e');
+      // 即 UI を戻してからダイアログ
+      if (mounted) {
+        setState(() {
+          isSending = false;
+          isConnected = false;
+          progressPercent = 0.0;
+        });
+      }
       debugPrint(stack.toString());
       _showBleErrorDialog(context, 'unused', '送信中にエラーが発生しました。詳細はログを確認してください。');
     } finally {
-      // 切断＆ステート更新させるとこ
+      // 切断＆ステート更新させるとこ　毎回接続切断している
       try {
         await trust.disconnect();
         // await widget.trustDevice.disconnect();
@@ -1197,11 +1229,11 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     return await checkWifiReady(ipAddress);
   }
 
-// Stateクラス内に入れて使ってください
+// Stateクラス内に入れて使う
   void _showBleErrorDialog(BuildContext ctx, String title, String message) {
     // State がマウントされていない（画面遷移中など）なら何もしない
     if (!mounted) return;
-    const unifiedTitle = 'エラー'; // タイトルをエラーで統一（不要なら引数の title を使うように変更可能）
+    const unifiedTitle = 'エラー'; // タイトルをエラーで統一する
     showDialog(
       context: ctx,
       barrierDismissible: false, // 外側タップで閉じたくなければ false。閉じてよいなら true にする
