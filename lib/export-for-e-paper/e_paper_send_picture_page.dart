@@ -968,20 +968,31 @@ class _SendPictureSelect extends State<SendPictureSelect> {
         });
   }
 
-  // 選択画像をRBPへ転送する処理
-  Future<void> sendImagePictureBle(String url) async {
+  // 選択画像をRBPへ転送する処理Future<void>
+  sendImagePictureBle(String url) async {
     if (widget.trustDevice == null) return;
     final trust = widget.trustDevice!;
 
+    // ここで送信インジケーターを出し、接続確認中のUIとして配置
+    if (mounted) {
+      setState(() {
+        isSending = true;
+        progressPercent = 0.0;
+      });
+    }
+
+    //　接続を成功させたか記録する
+    bool didConnectHere = false;
+    int totalSentBytes = 0;
+
     try {
-      // 画像取得：指定された URL のファイルを取得
+      // 画像取得
       final file = await (widget.cacheManager ?? DefaultCacheManager())
           .getSingleFile(url)
-    .timeout(const Duration(seconds: 1));
+          .timeout(const Duration(seconds: 4));
       final imageBytes = await file.readAsBytes();
 
       if (imageBytes.isEmpty) {
-        // 即 UI を戻してからダイアログ
         if (mounted) {
           setState(() {
             isSending = false;
@@ -991,75 +1002,80 @@ class _SendPictureSelect extends State<SendPictureSelect> {
         }
         throw Exception('画像データが空です。');
       }
-
-      final headerBytes = imageBytes.sublist(0, 10);
-      print('ファイルの先頭バイト: $headerBytes');
-      //　計測開始、処理終わるところに停止を置いてるので差をprint
+      //　ここから処理開始
       final stopwatch = Stopwatch()..start();
-      //　バイト列 + EOF
-      final payload = imageBytes;
-      //あとで落ちたときにどこまで遅れたか追跡ができるようにする
-      print(
-          '[デバック] BLE描画開始: total ${payload
-              .length} bytes, chunkSize=$chunkSize');
 
-      // 接続＆キャラクタリスティック取得
-      final device = widget.trustDevice;
-      //　接続時　ここで問題が起きたら接続エラー
+      final payload = imageBytes;
+      debugPrint('[デバック] BLE描画開始: total ${payload
+          .length} bytes, chunkSize=$chunkSize');
+
+      // 接続
       try {
-        await trust.connect(autoConnect: false)
-        //secounds:1にしたら接続エラーになった。
-            .timeout(const Duration(seconds: 2));
+        await trust.connect(autoConnect: false).timeout(
+            const Duration(seconds: 5));
+        didConnectHere = true;
         if (mounted) setState(() => isConnected = true);
       } on Exception catch (e) {
         debugPrint('[エラー] connect failed: $e');
-        _showBleErrorDialog(context, 'unused', 'BLEデバイスに接続できませんでした。\n再度お試しください。');
-     return;
-      }
-
-
-      //追加：MTUを大きくし通信速度を速める
-      await trust.requestMtu(185);
-      // await device.requestMtu(185);
-
-      //serviceとキャラクタリスティックを探す
-      late BluetoothCharacteristic char;
-      try {
-        final services = await trust.discoverServices()
-            .timeout(const Duration(seconds: 2));
-        final service = services.firstWhere((s) => s.uuid == service_UUID, orElse: () => throw Exception('サービスが見つかりません'));
-        char = service.characteristics.firstWhere((c) => c.uuid == char_UUID, orElse: () => throw Exception('キャラクタリスティックが見つかりません'));
-      } on Exception catch (e) {
-        if (imageBytes.isEmpty) {
-          // 即 UI を戻してからダイアログ
-          if (mounted) {
-            setState(() {
-              isSending = false;
-              isConnected = false;
-              progressPercent = 0.0;
-            });
-          }
+        // 接続失敗ならインジケーターを消す（エラーで即戻す）
+        if (mounted) {
+          setState(() {
+            isSending = false;
+            isConnected = false;
+            progressPercent = 0.0;
+          });
         }
-        debugPrint('[エラー] service/char discovery failed: $e');
-        _showBleErrorDialog(context, 'unused', 'キャラクタリスティックの取得に失敗しました。\n接続先を確認してください。');
+        _showBleErrorDialog(context, '接続エラー',
+            'BLEデバイスに接続できませんでした。\n再度お試しください。');
         return;
       }
 
-      // 分割送信をおこなう　chunksizeは180
-      for (int offset = 0; offset < payload.length; offset += chunkSize) {
-        final int end = (offset + chunkSize < payload.length)
-            ? offset + chunkSize
-            : payload.length;
-        final chunk = payload.sublist(offset, end);
-        //ここで落ちる場合もあるのでログを残す
-        print('[デバック] chunk [$offset..$end) = ${chunk.length} bytes');
+      // MTU 要求
+      try {
+        await trust.requestMtu(185);
+      } catch (e) {
+        debugPrint('[警告] requestMtu failed: $e');
+      }
 
-        //　バイト数計算
+      // サービス/キャラクタリスティック取得
+      late BluetoothCharacteristic char;
+      try {
+        final services = await trust.discoverServices().timeout(
+            const Duration(seconds: 5));
+        final service = services.firstWhere((s) => s.uuid == service_UUID,
+            orElse: () => throw Exception('サービスが見つかりません'));
+        char = service.characteristics.firstWhere((c) => c.uuid == char_UUID,
+            orElse: () => throw Exception('キャラクタリスティックが見つかりません'));
+
+      } on Exception catch (e) {
+        debugPrint('[エラー] service/char discovery failed: $e');
+        if (mounted) {
+          setState(() {
+            isSending = false;
+            isConnected = false;
+            progressPercent = 0.0;
+          });
+        }
+        _showBleErrorDialog(context,
+            '取得失敗エラー',
+            'UUIDの取得に失敗しました。\n接続先を確認してください。');
+        return;
+      }
+
+      // 送信ループ
+      for (int offset = 0; offset < payload.length; offset += chunkSize) {
+        final int end = (offset + chunkSize < payload.length) ? offset +
+            chunkSize : payload.length;
+
+        // offset～end の部分だけを切り出して chunk にする
+        final chunk = payload.sublist(offset, end);
+        debugPrint('[デバック] chunk [$offset..$end) = ${chunk.length} bytes');
+
         try {
           await char.write(chunk, withoutResponse: true);
           totalSentBytes += chunk.length;
-        } on Exception catch (e){
-          // 即 UI を戻してからダイアログ
+        } on Exception catch (e) {
+          debugPrint('[エラー] write failed at $offset: $e');
           if (mounted) {
             setState(() {
               isSending = false;
@@ -1067,35 +1083,39 @@ class _SendPictureSelect extends State<SendPictureSelect> {
               progressPercent = 0.0;
             });
           }
-          debugPrint('[エラー] write failed at $offset: $e');
-          _showBleErrorDialog(context, 'unused', '画像送信中にエラーが発生しました。\n再接続して再試行してください。');
+          _showBleErrorDialog(context,
+              '送信エラー',
+              '画像送信中にエラーが発生しました。\n再接続して再試行してください。');
           return;
         }
 
-        // バイト数計算
-        totalSentBytes += chunk.length;
-
-        // 進捗更新（doubleへのキャストが必要）
-        setState(() => progressPercent = end / payload.length);
-
-        print('chunk [$offset..$end) = ${chunk.length} bytes');
-        await Future.delayed(const Duration(milliseconds: 1));
+        if (mounted) setState(() => progressPercent = end / payload.length);
+        // 書き込みが完了するまで待ってから次に進む
+        await Future.delayed(Duration(milliseconds: 12));
       }
 
-      // 合計バイト数表示
-      // print('合計送信バイト数: $totalSentBytes bytes');
+      debugPrint('合計送信バイト数: $totalSentBytes bytes');
 
-      // タイマー停止
+      // 送信完了をユーザーに見せるため progress=1.0 を一瞬表示しておく
+      if (mounted) {
+        setState(() {
+          progressPercent = 1.0;
+        });
+      }
+      // 少し見せてから切断してインジケーターを消す
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // タイマー停止など
       stopwatch.stop();
       final elapsedMs = stopwatch.elapsed.inMilliseconds;
       final minutes = elapsedMs ~/ 60000;
       final seconds = (elapsedMs % 60000) ~/ 1000;
       debugPrint(
           '送信完了までの時間: ${minutes}分${seconds}秒（${elapsedMs} ms）');
-      //エラーが発生した際に、エラーの内容とエラーが発生した場所を出力する
     } catch (e, stack) {
       debugPrint('[エラー] 送信中に例外発生: $e');
-      // 即 UI を戻してからダイアログ
+      debugPrint(stack.toString());
+
       if (mounted) {
         setState(() {
           isSending = false;
@@ -1103,22 +1123,30 @@ class _SendPictureSelect extends State<SendPictureSelect> {
           progressPercent = 0.0;
         });
       }
-      debugPrint(stack.toString());
-      _showBleErrorDialog(context, 'unused', '送信中にエラーが発生しました。詳細はログを確認してください。');
+      _showBleErrorDialog(context, 'unused',
+          '送信中にエラーが発生しました。詳細はログを確認してください。');
     } finally {
-      // 切断＆ステート更新させるとこ　毎回接続切断している
-      try {
-        await trust.disconnect();
-        // await widget.trustDevice.disconnect();
-      } catch (_) {}
-      if (!mounted) return;
-      setState(() {
-        isSending = false;
-        // インジゲーターが止まる処理
-        isConnected = false;
-        connectionState = 'disconnect';
-        progressPercent = 0.0;
-      });
+      // 接続した場合のみ切断
+      if (didConnectHere) {
+        try {
+          await trust.disconnect();
+        } catch (_) {}
+        await Future.delayed(const Duration(milliseconds: 200));
+      } else {
+        debugPrint(
+            '[INFO] didConnectHere == false -> skip disconnect in finally');
+      }
+
+      // ここでインジケーターを消す（成功/失敗）
+      if (mounted) {
+        setState(() {
+          isSending = false;
+          isConnected = false;
+          connectionState = 'disconnect';
+          progressPercent = 0.0;
+        });
+      }
+      debugPrint('[UI] isSending set false');
     }
   }
 
