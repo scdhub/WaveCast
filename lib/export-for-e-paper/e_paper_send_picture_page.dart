@@ -81,6 +81,8 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   final List<bool> selectedMode = [true, false]; // 画像操作Button用リスト
   String? sortItemLis = 'new'; // 画像順表示名　初期：新しい順
   int selectedModeIndex = 1;
+  bool isConnecting = false;//接続確認
+  bool _sendingRequested = false;// ★送信表示の「要求」を一時的に保持
   bool deleteMode = false; // 画面操作状態、削除状態切り替え
   bool selectedItem = false; // 画像選択状態
   bool isLoading = true; // 画像読込状態
@@ -103,11 +105,12 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   int chunkSize = 180;
   int totalSentBytes = 0;
 
-  //1.PibLE-Bluezero
+  //1.PibLE-Bluezero　有効なし
+  //　書込みできなかった場合のエラー
   // final Guid service_UUID = Guid("12345678-1234-5678-1234-56789abcdef0");
   // final Guid char_UUID = Guid("12345678-1234-5678-1234-56789abcdef1");
 
-  //2.PibLE-Bluezero2
+  // 2.PibLE-Bluezero2
   final Guid service_UUID = Guid("12345678-1234-5678-1234-55555abcdef0");
   final Guid char_UUID = Guid("12345678-1234-5678-1234-55555abcdef1");
 
@@ -324,15 +327,50 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     callSdkMessage(data);
   }
 
-  Future<void> _handleSendImageToDeviceProgress(
-      Map<String, dynamic> data) async {
+  Future<void> _handleSendImageToDeviceProgress(Map<String, dynamic> data) async {
+    if (!mounted) return;
+
+    // 重要：接続済みでなければ無視（ネイティブ側が早めに送ってくることがある）
+    if (!isConnected) {
+      debugPrint('[IGNORED] onSendImageToDeviceProgress ignored because not connected yet. data: $data');
+      return;
+    }
+
+    // さらに、横長バーを表示する「要求」が出ていなければ無視する
+    if (!_sendingRequested) {
+      debugPrint('[IGNORED] onSendImageToDeviceProgress ignored because sending not requested.');
+      return;
+    }
+
     setState(() {
+      // ネイティブが percentage を送ってくるなら使う（無ければ 0）
+      final raw = data['progressPercent'];
+      if (raw != null) {
+        try {
+          progressPercent = (raw is num) ? (raw.toDouble() / 100.0) : (double.parse(raw.toString()) / 100.0);
+        } catch (_) {
+          progressPercent = 0.0;
+        }
+      } else {
+        progressPercent = 0.0;
+      }
+      // 実際の isSending は通常 sendImagePictureBle 側で遅延セットするが、
+      // 念のためここでも true にしておく（表示要求がある前提）
       isSending = true;
-      progressPercent = 0.0;
-      // progressPercent = (data['progressPercent'] ?? 0) / 100;
-      debugPrint("LinearProgressIndicator progressPercent: $progressPercent");
     });
+
+    debugPrint("LinearProgressIndicator progressPercent: $progressPercent");
   }
+
+  // Future<void> _handleSendImageToDeviceProgress(
+  //     Map<String, dynamic> data) async {
+  //   setState(() {
+  //     isSending = true;
+  //     progressPercent = 0.0;
+  //     // progressPercent = (data['progressPercent'] ?? 0) / 100;
+  //     debugPrint("LinearProgressIndicator progressPercent: $progressPercent");
+  //   });
+  // }
 
   Future<void> _handleBLEDeviceConnectCanceled(
       Map<String, dynamic> data) async {
@@ -675,7 +713,29 @@ class _SendPictureSelect extends State<SendPictureSelect> {
                 backgroundColor: Colors.transparent, //透明
                 valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF60DD72)),
               ),
+
             ),
+
+          ),
+
+        ),
+      // 既存の ModalBarrier / LinearProgressIndicator のあとに追加
+      if (isConnecting)
+        Positioned.fill(
+          child: Stack(
+            children: [
+              // 操作をブロック（isSending と重複しても問題なし）
+              ModalBarrier(color: Colors.black54, dismissible: false),
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 12),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
     ]);
@@ -838,13 +898,9 @@ class _SendPictureSelect extends State<SendPictureSelect> {
 
                             // wifiのreturnがfalseで返ってくる
                             if (!isWifiMode) {
-                              // wifiなし
-                              debugPrint(
-                                  '[デバック] BLE mode: Wi-Fiのチェックをせず、そのまま送信');
+                              debugPrint('[デバック] BLE mode: Wi-Fiのチェックをせず、そのまま送信');
                               onSendOK();
-                              //　非同期の場合、画面が破棄されていないかここでチェックする
-                              if (!mounted) return;
-                              setState(() => isConnected = true);
+                              // BLE の接続状態は sendImagePictureBle 側で管理するのでここでは setState しない
                               return;
                             }
 
@@ -882,30 +938,34 @@ class _SendPictureSelect extends State<SendPictureSelect> {
                             // wi-fiiがONでIPが取得できた場合
                             if (status == 'READY' || status == 'OK') {
                               final ip = widget.ipAddress ?? '';
-                              //ソケット通信でサーバの状態を確認
-                              final serverCheck =
-                              await checkServerReachable(ip);
+                              final serverCheck = await checkServerReachable(ip);
                               if (serverCheck['ok'] == true) {
-                                // 結果が返ってきて、接続が成功すると、送信開始
+                                // ここで UI を即時更新して横長プログレスを表示させる
+                                if (mounted) {
+                                  setState(() {
+                                    isConnected = true;      // 横長プログレス表示の条件
+                                    isSending = true;        // 操作ブロックを出す
+                                    progressPercent = 0.0;   // 進捗リセット
+                                  });
+                                }
+
+                                // 送信開始（Wi-Fi 側が実際に upload を担当）
+                                debugPrint('[selectImageCheckDialog] Wi-Fi mode: start send (dialog)');
                                 onSendOK();
-                                if (!mounted) return;
-                                setState(() => isConnected = true);
                                 return;
                               } else {
-                                // サーバー接続失敗。原因をユーザーに見せる（SocketException / Timeout 等）
                                 final err = serverCheck['error'] ?? '接続失敗';
-                                _showErrorDialog(
-                                    parentContext, 'サーバー接続失敗',
+                                _showErrorDialog(parentContext, 'サーバー接続失敗',
                                     'サーバー ($ip:5000) へ接続できませんでした。\n\n原因: $err\n端末のネットワークまたはサーバー側を確認してください。');
                                 return;
                               }
                             }
-
                             // それ以外（UNKNOWN 等）
                             _showErrorDialog(parentContext, 'Wi-Fi 状態不明',
                                 'Wi-Fi の状態を判定できませんでした。端末設定を確認してください。');
                             // Navigator.pop(context);
                           },
+
                           child: const Text("はい",
                               style: TextStyle(
                                   fontWeight: FontWeight.bold,
@@ -966,214 +1026,314 @@ class _SendPictureSelect extends State<SendPictureSelect> {
         });
   }
 
-// 計測開始
-  String _ts() => DateTime.now().toIso8601String();
+  // 計測開始
+//   String _ts() => DateTime.now().toIso8601String();
 
-// 接続（UUID取得）
-  Future<BluetoothCharacteristic> getCharacteristicWithRetry({
-    required dynamic trust,
-    required Guid serviceUUID,
-    required Guid charUUID,
+  // BLE デバイスへの接続開始
+  //デバイスが提供する state / connectionState の Stream を監視できる
+  //イベントを受け取るまで待機するように修正
+  Future<bool> waitForDeviceConnected(dynamic trust,
+      { Duration timeout = const Duration(seconds: 4) }) async {
+    // final start = DateTime.now().millisecondsSinceEpoch;
+    // debugPrint('[TIME][connect] connect() begin: ${_ts()}');
+    try {
+      //デバイスへの接続をリクエスト
+      await trust.connect(autoConnect: false);
+    } catch (e) {
+      // debugPrint('[TIME][connect] connect() threw immediately: $e');
+    }
+
+    try {
+      //dynamicとして扱えるか確認+接続状態を通知するStreamかどうか
+      if (trust is dynamic && trust.state is Stream) {
+        //　状態の方を確認
+        final s = await trust.state
+        //接続を完全待ち
+            .firstWhere((s) => s.toString().toLowerCase().contains('connected'))
+            .timeout(timeout);
+        // final end = DateTime.now().millisecondsSinceEpoch;
+        // debugPrint('[TIME][connect] connected event received: ${_ts()} (elapsed ${end - start} ms)');
+        return true;
+
+        //　Stream の提供方法が異なる場合
+        //　すべての BLE デバイスが同じ API を提供するわけではない
+      } else if (trust is dynamic && trust.connectionState is Stream) {
+        final s = await trust.connectionState
+        //接続を完全待ち
+            .firstWhere((s) => s.toString().toLowerCase().contains('connected'))
+            .timeout(timeout);
+        // final end = DateTime.now().millisecondsSinceEpoch;
+        // debugPrint('[TIME][connect] connected event received (connectionState): ${_ts()} (elapsed ${end - start} ms)');
+        return true;
+
+        //　Streamなし
+      } else {
+        // debugPrint('[TIME][connect] no state stream; waiting timeout (${timeout.inSeconds}s)');
+        await Future.delayed(timeout);
+        // final end = DateTime.now().millisecondsSinceEpoch;
+        // debugPrint('[TIME][connect] fallback wait done: ${_ts()} (elapsed ${end - start} ms)');
+        return false;
+      }
+
+      //制御（Stream はあるけど、指定時間内に接続成功の通知が来なかったら例外を投げて制御）
+      //接続不可
+    } on TimeoutException {
+      // final end = DateTime.now().millisecondsSinceEpoch;
+      // debugPrint('[TIME][connect] timed out after ${timeout.inSeconds}s: ${_ts()} (elapsed ${end - start} ms)');
+      //　falseを返すことで、スローすることが可能。後でレスポンスが返ってきたりするのを制御する
+      return false;
+
+      //例外
+    } catch (e, st) {
+      // final end = DateTime.now().millisecondsSinceEpoch;
+      // debugPrint('[TIME][connect] error while waiting for state: $e (${end - start} ms)');
+      debugPrint(st.toString());
+
+      return false;
+    }
+  }
+
+
+  // 接続（サービスUUIDとキャラUUIDを取得）
+  // 相手が応答しない場合に ずっと待ち続けてアプリがフリーズするためタイムアウトは必要
+  Future<BluetoothCharacteristic> getCharacteristicWithRetry(
+      {required dynamic trust, required Guid serviceUUID, required Guid charUUID,
   }) async {
-    int attempt = 0;
-    while (true) {
-      final attemptStart = DateTime.now().millisecondsSinceEpoch;
-      debugPrint('[TIME][discover] attempt ${attempt + 1} start: ${_ts()}');
-      try {
-        // per-attempt timeout を短めに（ここは既に 3s）
-        final services = await trust.discoverServices().timeout(Duration(seconds: 3));
-        final attemptEnd = DateTime.now().millisecondsSinceEpoch;
-        debugPrint('[TIME][discover] attempt ${attempt + 1} success: ${_ts()} (elapsed ${attemptEnd - attemptStart} ms)');
 
+    //リトライ処理　
+    int attempt = 0;
+
+    //抜ける前提のループ（リトライ）
+    while (true) {
+      // final attemptStart = DateTime.now().millisecondsSinceEpoch;
+      // debugPrint('[TIME][discover] attempt ${attempt + 1} start: ${_ts()}');
+
+      try {
+        // ここは既に 3秒でタイムアウトさせる
+        final services = await trust.discoverServices().timeout(Duration(seconds: 3));
+        // final attemptEnd = DateTime.now().millisecondsSinceEpoch;
+        // debugPrint('[TIME][discover] attempt ${attempt + 1} success: ${_ts()} (elapsed ${attemptEnd - attemptStart} ms)');
+
+        //　最初に条件を満たす
+        // サービスUUIDを探す　無ければ例外を投げる
         final service = services.firstWhere(
               (s) => s.uuid == serviceUUID,
           orElse: () => throw Exception('サービスUUIDが見つかりません'),
         );
+        //　目的のキャラクタリスティックUUIDを探す　無ければ例外を投げる
         final char = service.characteristics.firstWhere(
               (c) => c.uuid == charUUID,
           orElse: () => throw Exception('キャラクタリスティックが見つかりません'),
         );
         return char;
+
+        //失敗した際のダイアログ表示
       } catch (e, st) {
-        final attemptEnd = DateTime.now().millisecondsSinceEpoch;
-        debugPrint('[TIME][discover] attempt ${attempt + 1} failed: ${_ts()} (elapsed ${attemptEnd - attemptStart} ms) error: $e');
+        // final attemptEnd = DateTime.now().millisecondsSinceEpoch;
+        // debugPrint('[TIME][discover] attempt ${attempt + 1} failed: ${_ts()} (elapsed ${attemptEnd - attemptStart} ms) error: $e');
         debugPrint(st.toString());
+        //　2回目（0回、1回）で終了する
         if (attempt >= 1) {
-          debugPrint('[TIME][discover] giving up after ${attempt + 1} attempts');
           rethrow;
         }
-        attempt++;
-        await Future.delayed(const Duration(milliseconds: 500));
+        attempt++; //　回数カウント
+        //　再試行
+        await Future.delayed(const Duration(milliseconds: 200));
       }
     }
   }
 
-// BLEデバイスの接続完了を待つ関数
-  //connect() を呼び出して接続を開始
-  //デバイスが提供する state / connectionState の Stream を監視できる
-  //イベントを受け取るまで待機
-  Future<bool> waitForDeviceConnected(dynamic trust, { Duration timeout = const Duration(seconds: 4) }) async {
-    final start = DateTime.now().millisecondsSinceEpoch;
-    debugPrint('[TIME][connect] connect() begin: ${_ts()}');
-    try {
-      await trust.connect(autoConnect: false);
-    } catch (e) {
-      debugPrint('[TIME][connect] connect() threw immediately: $e');
-    }
 
-    //接続中に例外が発生した場合も false を返し、処理が止まらないよう安全に制御する
-    try {
-      if (trust is dynamic && trust.state is Stream) {
-        final s = await trust.state
-            .firstWhere((s) => s.toString().toLowerCase().contains('connected'))
-            .timeout(timeout);
 
-        final end = DateTime.now().millisecondsSinceEpoch;
-        debugPrint('[TIME][connect] connected event received: ${_ts()} (elapsed ${end - start} ms)');
-        return true;
-
-      } else if (trust is dynamic && trust.connectionState is Stream) {
-        final s = await trust.connectionState
-            .firstWhere((s) => s.toString().toLowerCase().contains('connected'))
-            .timeout(timeout);
-
-        final end = DateTime.now().millisecondsSinceEpoch;
-        debugPrint('[TIME][connect] connected event received (connectionState): ${_ts()} (elapsed ${end - start} ms)');
-        return true;
-
-      } else {
-        debugPrint('[TIME][connect] no state stream; waiting timeout (${timeout.inSeconds}s)');
-        await Future.delayed(timeout);
-
-        final end = DateTime.now().millisecondsSinceEpoch;
-        debugPrint('[TIME][connect] fallback wait done: ${_ts()} (elapsed ${end - start} ms)');
-        return false;
-      }
-
-    } on TimeoutException {
-      final end = DateTime.now().millisecondsSinceEpoch;
-      debugPrint('[TIME][connect] timed out after ${timeout.inSeconds}s: ${_ts()} (elapsed ${end - start} ms)');
-      return false;
-
-    } catch (e, st) {
-      final end = DateTime.now().millisecondsSinceEpoch;
-      debugPrint('[TIME][connect] error while waiting for state: $e (${end - start} ms)');
-      debugPrint(st.toString());
-      return false;
-    }
-  }
-
-// sendImagePictureBle（計測付き、summary 出力）
+// sendImagePictureBle（計測は後程消す）
   Future<void> sendImagePictureBle(String url) async {
     if (widget.trustDevice == null) return;
     final trust = widget.trustDevice!;
-    final metrics = <String, dynamic>{}; // 計測結果を集める
+    // final metrics = <String, dynamic>{}; // 計測結果を集める
+    // if (mounted) setState(() { isSending = true; progressPercent = 0.0; });
 
-    if (mounted) setState(() { isSending = true; progressPercent = 0.0; });
-
-    bool didConnectHere = false;
+    bool didConnectHere = false; //接続状態があるかないか
     int totalSentBytes = 0;
-    final overallStart = DateTime.now().millisecondsSinceEpoch;
-    debugPrint('[TIME][overall] send start: ${_ts()}');
+    // final overallStart = DateTime.now().millisecondsSinceEpoch;
+    // debugPrint('[TIME][overall] send start: ${_ts()}');
 
     try {
-      // ファイル取得計測
-      final tFileStart = DateTime.now().millisecondsSinceEpoch;
-      debugPrint('[TIME][file] getSingleFile start: ${_ts()}');
+      // 画像ファイル取得（計測）
+      // final tFileStart = DateTime.now().millisecondsSinceEpoch;
+      // debugPrint('[TIME][file] getSingleFile start: ${_ts()}');
+
       final file = await (widget.cacheManager ?? DefaultCacheManager())
           .getSingleFile(url)
           .timeout(const Duration(seconds: 3));
       final imageBytes = await file.readAsBytes();
-      final tFileEnd = DateTime.now().millisecondsSinceEpoch;
-      metrics['file_ms'] = tFileEnd - tFileStart;
-      debugPrint('[TIME][file] getSingleFile done: ${_ts()} (elapsed ${metrics['file_ms']} ms)');
+      // final tFileEnd = DateTime.now().millisecondsSinceEpoch;
+      // metrics['file_ms'] = tFileEnd - tFileStart;
+      // debugPrint('[TIME][file] getSingleFile done: ${_ts()} (elapsed ${metrics['file_ms']} ms)');
 
       if (imageBytes.isEmpty) throw Exception('画像データが空です。');
 
       final payload = imageBytes;
-      debugPrint('[TIME][overall] payload length=${payload.length}');
+      // debugPrint('[TIME][overall] payload length=${payload.length}');
 
-      // connect 計測
-      final tConnectStart = DateTime.now().millisecondsSinceEpoch;
-      debugPrint('[TIME][connect] waitForDeviceConnected start: ${_ts()}');
-      final connected = await waitForDeviceConnected(trust, timeout: Duration(seconds: 5));
-      final tConnectEnd = DateTime.now().millisecondsSinceEpoch;
-      metrics['connect_ms'] = tConnectEnd - tConnectStart;
-      debugPrint('[TIME][connect] waitForDeviceConnected end: ${_ts()} (elapsed ${metrics['connect_ms']} ms)');
+      // 接続開始前：ここでスピナーを出す（ファイル取得後に出すのが自然）
+      if (mounted) {
+        setState(() {
+          isConnecting = true;   // ぐるぐるインジケータを表示
+          isSending = false;     // 送信バーはまだ出さない
+          progressPercent = 0.0;
+        });
+      }
+
+      // 接続時間 計測
+      // final tConnectStart = DateTime.now().millisecondsSinceEpoch;
+      // debugPrint('[TIME][connect] waitForDeviceConnected start: ${_ts()}');
+
+      //　ここで関数へ移動し接続を行う
+      final connected = await waitForDeviceConnected
+        (trust, timeout: Duration(seconds: 5));
+      // final tConnectEnd = DateTime.now().millisecondsSinceEpoch;
+      // metrics['connect_ms'] = tConnectEnd - tConnectStart;
+      // debugPrint('[TIME][connect] waitForDeviceConnected end: ${_ts()} (elapsed ${metrics['connect_ms']} ms)');
+
+      // 接続待ち終了（成功/失敗どちらでも UI を変える）
+      if (mounted) {
+        setState(() {
+          isConnecting = false;   // ぐるぐるを消す
+          _sendingRequested = false;
+        });
+      }
 
       if (!connected) {
-        if (mounted) setState(() { isSending = false; isConnected = false; progressPercent = 0.0; });
+        debugPrint('[エラー] connect failed: timed out waiting for connected state');
+        if (mounted) {
+          setState(() {
+            isSending = false;
+            isConnected = false;
+            _sendingRequested = false;
+            progressPercent = 0.0;
+          });
+        }
         await _showBleErrorAfterState('接続エラー', 'BLEデバイスに接続できませんでした。\n再度お試しください。');
-        return;
+        return; //遅れてイベントが来ても送信処理を進めないようにする制御
       }
+
+      // 接続成功：送信フェーズへ切り替え（ここで一度に切り替える）
       didConnectHere = true;
-      if (mounted) setState(() => isConnected = true);
-
-      // MTU 測定（試行）
-      final tMtuStart = DateTime.now().millisecondsSinceEpoch;
-      try {
-        await trust.requestMtu(185).timeout(Duration(seconds: 2));
-        final tMtuEnd = DateTime.now().millisecondsSinceEpoch;
-        metrics['mtu_ms'] = tMtuEnd - tMtuStart;
-        debugPrint('[TIME][mtu] requestMtu done: ${_ts()} (elapsed ${metrics['mtu_ms']} ms)');
-      } catch (e) {
-        final tMtuEnd = DateTime.now().millisecondsSinceEpoch;
-        metrics['mtu_ms'] = tMtuEnd - tMtuStart;
-        debugPrint('[TIME][mtu] requestMtu failed: $e (elapsed ${metrics['mtu_ms']} ms)');
+      if (mounted) {
+        setState(() {
+          isConnecting = false;    // スピナー隠し
+          isConnected = true;      // デバイス接続状態フラグ
+          progressPercent = 0.0;   // 進捗リセット
+          // isSending はすぐに true にしない（フラッシュ防止のため）
+        });
       }
 
-      // discover + characteristic 計測
-      final tDiscStart = DateTime.now().millisecondsSinceEpoch;
-      debugPrint('[TIME][discover] getCharacteristicWithRetry start: ${_ts()}');
+// 表示要求をセットして、遅延で実際に isSending を true にする（短いデバウンス）
+      _sendingRequested = true;
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (!mounted) return;
+        // まだ接続中で、かつ要求が残っていれば表示する
+        if (_sendingRequested && isConnected) {
+          setState(() {
+            isSending = true;
+          });
+        }
+      });
+
+      // MTU 測定（1回で送信できるデータの最大バイト数）
+      // final tMtuStart = DateTime.now().millisecondsSinceEpoch;
+      try {
+        //　MTU (Maximum Transmission Unit) を測定・リクエスト
+        await trust.requestMtu(185).timeout(Duration(seconds: 2));
+
+        // final tMtuEnd = DateTime.now().millisecondsSinceEpoch;
+        // metrics['mtu_ms'] = tMtuEnd - tMtuStart;
+        // debugPrint('[TIME][mtu] requestMtu done: ${_ts()} (elapsed ${metrics['mtu_ms']} ms)');
+      } catch (e) {
+        // final tMtuEnd = DateTime.now().millisecondsSinceEpoch;
+        // metrics['mtu_ms'] = tMtuEnd - tMtuStart;
+        // debugPrint('[TIME][mtu] requestMtu failed: $e (elapsed ${metrics['mtu_ms']} ms)');
+      }
+
+      // discover + characteristic
+      // final tDiscStart = DateTime.now().millisecondsSinceEpoch;
+      // debugPrint('[TIME][discover] getCharacteristicWithRetry start: ${_ts()}');
       late BluetoothCharacteristic char;
       try {
-        char = await getCharacteristicWithRetry(trust: trust, serviceUUID: service_UUID, charUUID: char_UUID);
-        final tDiscEnd = DateTime.now().millisecondsSinceEpoch;
-        metrics['discover_ms'] = tDiscEnd - tDiscStart;
-        debugPrint('[TIME][discover] getCharacteristicWithRetry done: ${_ts()} (elapsed ${metrics['discover_ms']} ms)');
+        //　サービス・キャラクタリスティックの取得
+        char = await getCharacteristicWithRetry(trust: trust,
+            serviceUUID: service_UUID, charUUID: char_UUID);
+
+        // final tDiscEnd = DateTime.now().millisecondsSinceEpoch;
+        // metrics['discover_ms'] = tDiscEnd - tDiscStart;
+        // debugPrint('[TIME][discover] getCharacteristicWithRetry done: ${_ts()} (elapsed ${metrics['discover_ms']} ms)');
       } on Exception catch (e, st) {
-        final tDiscEnd = DateTime.now().millisecondsSinceEpoch;
-        metrics['discover_ms'] = tDiscEnd - tDiscStart;
-        debugPrint('[TIME][discover] failed: $e (elapsed ${metrics['discover_ms']} ms)');
+        // final tDiscEnd = DateTime.now().millisecondsSinceEpoch;
+        // metrics['discover_ms'] = tDiscEnd - tDiscStart;
+        // debugPrint('[TIME][discover] failed: $e (elapsed ${metrics['discover_ms']} ms)');
         debugPrint(st.toString());
-        if (mounted) setState(() { isSending = false; isConnected = false; progressPercent = 0.0; });
+
+        if (mounted) setState(() {
+          isSending = false;
+          isConnected = false;
+          _sendingRequested = false;
+          progressPercent = 0.0; });
         await _showBleErrorAfterState('取得失敗エラー', 'UUIDの取得に失敗しました。\n接続先を確認してください。');
         return;
       }
 
-      // 送信ループ計測（各チャンクごと）
+      // 送信ループ
+      //　writesの情報を下記へ保存
       final writes = <Map<String, dynamic>>[];
+
+      //　データを chunkSize ごとに分割して送信
       for (int offset = 0; offset < payload.length; offset += chunkSize) {
         final int end = (offset + chunkSize < payload.length) ? offset + chunkSize : payload.length;
         final chunk = payload.sublist(offset, end);
-        debugPrint('[TIME][write] chunk start offset=$offset end=$end ${_ts()}');
 
-        final writeStart = DateTime.now().millisecondsSinceEpoch;
+        // debugPrint('[TIME][write] chunk start offset=$offset end=$end ${_ts()}');
+
+        // final writeStart = DateTime.now().millisecondsSinceEpoch;
         int writeAttempt = 0;
         bool wrote = false;
+
+        // 成功まで0-1回　リトライ　
         while (!wrote) {
           try {
-            await char.write(chunk, withoutResponse: true).timeout(Duration(seconds: 2));
-            final writeEnd = DateTime.now().millisecondsSinceEpoch;
-            final elapsed = writeEnd - writeStart;
-            writes.add({'offset': offset, 'len': chunk.length, 'attempt': writeAttempt + 1, 'ms': elapsed, 'ok': true});
+            //　個別チャンクの書き込み
+            await char.write(chunk, withoutResponse: true)
+                .timeout(Duration(seconds: 2));
+
+            // final writeEnd = DateTime.now().millisecondsSinceEpoch;
+            // final elapsed = writeEnd - writeStart;
+            // writes.add({'offset': offset, 'len': chunk.length, 'attempt': writeAttempt + 1, 'ms': elapsed, 'ok': true});
             totalSentBytes += chunk.length;
             wrote = true;
+
+            //タイムアウト後の処理を無効化しているので制御が効く
           } on TimeoutException catch (te) {
-            final writeEnd = DateTime.now().millisecondsSinceEpoch;
-            final elapsed = writeEnd - writeStart;
-            writes.add({'offset': offset, 'len': chunk.length, 'attempt': writeAttempt + 1, 'ms': elapsed, 'ok': false, 'error': 'timeout'});
-            debugPrint('[TIME][write] timeout at offset $offset attempt ${writeAttempt + 1}: ${_ts()} (elapsed ${elapsed} ms)');
+            // final writeEnd = DateTime.now().millisecondsSinceEpoch;
+
+            // final elapsed = writeEnd - writeStart;
+            // writes.add({'offset': offset, 'len': chunk.length, 'attempt': writeAttempt + 1, 'ms': elapsed, 'ok': false, 'error': 'timeout'});
+            // debugPrint('[TIME][write] timeout at offset $offset attempt ${writeAttempt + 1}: ${_ts()} (elapsed ${elapsed} ms)');
+
             if (writeAttempt >= 1) {
-              if (mounted) setState(() { isSending = false; isConnected = false; progressPercent = 0.0; });
+              if (mounted) setState(() {
+                isSending = false;
+                isConnected = false;
+                progressPercent = 0.0;
+                _sendingRequested = false;});
               await _showBleErrorAfterState('送信タイムアウト', '書き込みタイムアウトが発生しました。');
               return;
             }
+
+            //例外
           } catch (e, st) {
-            final writeEnd = DateTime.now().millisecondsSinceEpoch;
-            final elapsed = writeEnd - writeStart;
-            writes.add({'offset': offset, 'len': chunk.length, 'attempt': writeAttempt + 1, 'ms': elapsed, 'ok': false, 'error': e.toString()});
-            debugPrint('[TIME][write] error at offset $offset attempt ${writeAttempt + 1}: $e (elapsed ${elapsed} ms)');
+            // final writeEnd = DateTime.now().millisecondsSinceEpoch;
+            // final elapsed = writeEnd - writeStart;
+            // writes.add({'offset': offset, 'len': chunk.length, 'attempt': writeAttempt + 1, 'ms': elapsed, 'ok': false, 'error': e.toString()});
+            // debugPrint('[TIME][write] error at offset $offset attempt ${writeAttempt + 1}: $e (elapsed ${elapsed} ms)');
             debugPrint(st.toString());
             if (writeAttempt >= 1) {
               if (mounted) setState(() { isSending = false; isConnected = false; progressPercent = 0.0; });
@@ -1182,43 +1342,60 @@ class _SendPictureSelect extends State<SendPictureSelect> {
             }
           }
           writeAttempt++;
+          //　書き込みに失敗
           if (!wrote) await Future.delayed(Duration(milliseconds: 150 * writeAttempt));
         }
-
         if (mounted) setState(() => progressPercent = end / payload.length);
         await Future.delayed(Duration(milliseconds: 12));
       }
 
-      metrics['writes'] = writes;
-      metrics['totalSentBytes'] = totalSentBytes;
+      // metrics['writes'] = writes;
+      // metrics['totalSentBytes'] = totalSentBytes;
 
       // 送信完了
-      final overallEnd = DateTime.now().millisecondsSinceEpoch;
-      metrics['overall_ms'] = overallEnd - overallStart;
-      debugPrint('[TIME][summary] metrics: ${metrics.toString()}');
+      // final overallEnd = DateTime.now().millisecondsSinceEpoch;
+      // metrics['overall_ms'] = overallEnd - overallStart;
+      // debugPrint('[TIME][summary] metrics: ${metrics.toString()}');
 
-      // UI 更新（完了を見せる）
+      // UI 更新　一瞬だけUIの状態をユーザーへ見せる
       if (mounted) {
         setState(() {
           progressPercent = 1.0;
         });
       }
       await Future.delayed(const Duration(milliseconds: 100));
+
     } catch (e, st) {
       debugPrint('[ERROR] send exception: $e');
       debugPrint(st.toString());
-      if (mounted) setState(() { isSending = false; isConnected = false; progressPercent = 0.0; });
-      await _showBleErrorAfterState('送信エラー', '画像送信中にエラーが発生しました。\n再接続して再試行してください。');
+      if (mounted) setState(() {
+        isSending = false;
+        isConnected = false;
+        _sendingRequested = false;
+        progressPercent = 0.0; });
+      await _showBleErrorAfterState('送信エラー', '画像送信中に例外が発生しました。\n再接続して再試行してください。');
       return;
+
+      //　切断する
     } finally {
+      //　送信が終わったら、成功でも失敗でも、BLEを切断して画面を元に戻す
       if (didConnectHere) {
-        try { await trust.disconnect(); } catch (_) {}
-        await Future.delayed(const Duration(milliseconds: 200));
+        try {
+          await trust.disconnect();
+        } catch (_) {}
+        //　切断処理が安定するように少し待つ
+        await Future.delayed(const Duration(milliseconds: 100));
       }
-      if (mounted) setState(() { isSending = false; isConnected = false; connectionState = 'disconnect'; progressPercent = 0.0; });
-      debugPrint('[TIME][overall] send finished: ${_ts()}');
+
+      if (mounted) setState(() {
+        isSending = false; isConnected = false;
+        connectionState = 'disconnect';
+        _sendingRequested = false;
+        progressPercent = 0.0; });
+      // debugPrint('[TIME][overall] send finished: ${_ts()}');
     }
   }
+
 
 
 // wifi通信を行う際の処理
@@ -1251,7 +1428,6 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     //　完了を待つ
     await dio.post(
       serverUrl,
-      // server_Url,
       data: form,
       onSendProgress: (sent, total) {
         setState(() {
@@ -1329,13 +1505,13 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   }
 
 
-  // ダイアログを"確実に"ポストフレームで表示する
-  void _showDialogPostFrame(Future<void> Function() showFn) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // 非同期の showFn をそのまま呼ぶ（戻り値は待たない）
-      showFn();
-    });
-  }
+  // // ダイアログを"確実に"ポストフレームで表示する
+  // void _showDialogPostFrame(Future<void> Function() showFn) {
+  //   WidgetsBinding.instance.addPostFrameCallback((_) {
+  //     // 非同期の showFn をそのまま呼ぶ（戻り値は待たない）
+  //     showFn();
+  //   });
+  // }
 
   // ルートナビゲータでエラーダイアログを出す（ModalBarrier 等の影響を受けにくい）
   Future<void> _showBleErrorDialogRoot(String title, String message) async {
