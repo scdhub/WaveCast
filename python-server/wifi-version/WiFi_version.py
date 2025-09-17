@@ -24,8 +24,9 @@ def status():
 def set_force_error():
     # curl -X POST http://<pi>:5000/debug/force_error -d '{"on": true}'
     data = request.get_json() or {}
-    app.force_error = bool(data.get('on', True))
-    #app.force_error = bool(data.get('on', False))
+    #app.force_error = bool(data.get('on', True))
+    #配信エラー　テストしたいときはtrue
+    app.force_error = bool(data.get('on', False))
     return jsonify({'force_error': app.force_error}), 200
 
 # 保存場所
