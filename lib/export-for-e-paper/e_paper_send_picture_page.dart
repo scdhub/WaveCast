@@ -3,7 +3,6 @@
 
 import 'dart:async';
 import 'dart:convert';
-// import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
@@ -16,7 +15,6 @@ import 'package:iphone_bt_epaper/export-for-e-paper/server_image_delete_check_po
 import 'package:iphone_bt_epaper/export-for-e-paper/sever_data_bind.dart';
 import 'package:transparent_image/transparent_image.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
-// import '../service/socket_service.dart';
 import 'bluetooth_connection_state.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
@@ -24,8 +22,10 @@ import 'package:http/http.dart' as http; // MultipartRequest
 import 'package:http_parser/http_parser.dart'; // MediaType
 import 'package:path/path.dart' as path;
 import 'package:dio/dio.dart' show Dio, FormData, MultipartFile;
-
 import '../theme.dart';
+
+import 'dart:math' as math;
+import 'package:flutter/services.dart'; // PlatformException
 
 // SendPictureSelect() を使っているすべての箇所で、それぞれの引数を渡さないとエラー になる
 // wifi通信とBLE通信を切り分ける際に、引数で判別するように修正する。
@@ -93,10 +93,16 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   String? resultContext; // sdk異常終了時エラーメッセージ内容
   String connectionState = "disconnect"; // BL接続状態
   bool _readyToSend = false; // characteristic を取得して送信準備ができたか
+  bool _didShowTest = false; // クラスのフィールドに追加
 
   bool _lockUI = false; // トランジション中に UI を強制ロックするため
   // --- 追加：uiBlocked を getter にする ---
   bool get uiBlocked => isConnecting || isSending || _lockUI;
+
+  // bool get isWifiMode => widget.ipAddress != null;
+  bool _currentModeIsWifi = false;
+  Timer? _wifiPollingTimer;
+  bool _seenProcessing = false;
 
   //　配信ダイアログ確認用
   // final callbackName = 'onSendImageToDeviceFailed';
@@ -104,7 +110,7 @@ class _SendPictureSelect extends State<SendPictureSelect> {
 
   // メッセージに基づく処理をマッピングするための Map
   late final Map<String, Future<void> Function(Map<String, dynamic>)>
-      _messageHandlers;
+  _messageHandlers;
 
   List<ReversedData> reverseData = []; //サーバーデータ：新しい順 // 未使用
   List<DateSort> dateSort = []; //日付並び替え  // 未使用
@@ -115,11 +121,22 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   int chunkSize = 180;
   int totalSentBytes = 0;
 
-  // 2.PibLE-Bluezero0 2
-  final Guid service_UUID = Guid("12345678-1234-5678-1234-55555abcdef0");
-  final Guid char_UUID = Guid("12345678-1234-5678-1234-55555abcdef1");
+  // PibLE-Bluezero0/2
+  // final Guid service_UUID = Guid("12345678-1234-5678-1234-55555abcdef0");
+  // final Guid char_UUID = Guid("12345678-1234-5678-1234-55555abcdef1");
+  // final Guid statusCharUUID = Guid("12345678-1234-5678-1234-55555abcdef2");
 
-//*****************************************************************
+  final Guid service_UUID = Guid('12345678-1234-5678-1234-56789abcdef0');
+  final Guid char_UUID = Guid('12345678-1234-5678-1234-55555abcdef1');
+  final Guid statusCharUUID = Guid('12345678-1234-5678-1234-55555abcdef2');
+
+  BluetoothCharacteristic? myCharacteristic;
+  BluetoothDevice? connectedDevice;
+
+  final Duration _minVisibleDuration = Duration(milliseconds: 900);
+  final Duration _maxDisplayWait = Duration(seconds: 25);
+
+  //*****************************************************************
 
   //　チャンネル登録中（URL）
   static const platform = MethodChannel('com.example.iphone_bt_epaper/channel');
@@ -127,8 +144,8 @@ class _SendPictureSelect extends State<SendPictureSelect> {
 
   // SDKcallback_message
   static const BasicMessageChannel<String> _channel =
-      BasicMessageChannel<String>(
-          'com.example.iphone_bt_epaper/channel', StringCodec());
+  BasicMessageChannel<String>(
+      'com.example.iphone_bt_epaper/channel', StringCodec());
 
   @override
   void initState() {
@@ -136,6 +153,7 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     initialize();
     // //　全画面表示してナビゲーションバー非表示にし、かぶらないようにする
     // SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
+    // BLE接続完了後にcharacteristicを取得している前提
 
     // メッセージに基づいて処理をマッピング
     _messageHandlers = {
@@ -157,6 +175,17 @@ class _SendPictureSelect extends State<SendPictureSelect> {
       return "";
     });
   }
+
+  // void setupNotification() async {
+  //   if (myCharacteristic == null) return;
+  //
+  //   await myCharacteristic!.setNotifyValue(true); // 通知有効化
+  //   myCharacteristic!.value.listen((value) {
+  //     String msg = utf8.decode(value);
+  //     print("*******BLE通知受信: $msg");
+  //   });
+  // }
+
 
   // Wi-Fi 状態を問い合わせる
   Future<Map<String, dynamic>> checkWifiStatusNative() async {
@@ -188,7 +217,7 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   // サーバへのソケット接続を試み、結果と失敗時はエラーメッセージを返す
   Future<Map<String, dynamic>> checkServerReachable(String ip,
       {int port = 5000,
-      Duration timeout = const Duration(milliseconds: 350)}) async {
+        Duration timeout = const Duration(milliseconds: 350)}) async {
     try {
       //　socket.connectでソケット通信を行う
       final socket = await Socket.connect(ip, port, timeout: timeout);
@@ -258,30 +287,58 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     }
   }
 
-  // メッセージ受信後の処理
-  Future<void> handleReceivedMessage(String? message) async {
-    if (message != null) {
-      // 受信した JSON を `Map<String, dynamic>` に変換
-      final Map<String, dynamic> decodedData = jsonDecode(message);
-      // メッセージのcallbackNameを取得
-      final String? callbackName = decodedData["callbackName"];
+  // メッセージ受信後の処理（BLE経路）
+  Future<Map<String, dynamic>?> handleReceivedMessage(String? message) async {
+    if (message == null) return null;
+    Map<String, dynamic>? decodedData;
 
-      if (callbackName != null) {
-        // マッピングされた処理を実行
-        final handler = _messageHandlers[callbackName];
-        if (handler != null) {
-          await handler(decodedData);
-        } else {
-          debugPrint("Unknown message callbackName: $callbackName");
+    // JSONとしてパース
+    try {
+      decodedData = jsonDecode(message) as Map<String, dynamic>?;
+    } catch (_) {
+      // 非JSONの場合
+      try {
+        final parts = message.split(':');
+        if (parts.length >= 3 &&
+            (parts[0] == 'E' || parts[0].toUpperCase() == 'ERR')) {
+          decodedData = {
+            'callbackName': 'onSendImageToDeviceFailed',
+            'message': 'e-paper に配信できませんでした',
+            'error': {
+              'code': parts[1],
+              'correlation_id': parts.sublist(2).join(':')
+            }
+          };
         }
-      } else {
-        debugPrint("Error: No 'callbackName' field in message");
+      } catch (e) {
+        debugPrint('handleReceivedMessage parse fallback failed: $e');
       }
     }
+
+    if (decodedData == null) return null;
+
+    // callbackName でハンドラを呼ぶ
+    final String? callbackName = decodedData["callbackName"];
+    if (callbackName != null) {
+      final handler = _messageHandlers[callbackName];
+      if (handler != null) {
+        await handler(decodedData);
+      } else {
+        debugPrint(
+            "Unknown message callbackName: $callbackName; showing dialog");
+        callSdkMessage(decodedData);
+      }
+    } else {
+      debugPrint(
+          "Error: No 'callbackName' field in message; raw: $decodedData");
+    }
+    return decodedData;
   }
 
   @override
   void dispose() {
+    _wifiPollingTimer?.cancel();
+    _wifiPollingTimer = null;
     super.dispose();
   }
 
@@ -299,15 +356,38 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   }
 
   Future<void> _handleBLEDeviceConnectFailed(Map<String, dynamic> data) async {
+    // Wi-Fi送信中なら BLE のハンドラは無視
+    if (_currentModeIsWifi) return;
+
     setState(() {
       isConnected = false;
       isSending = false; // 進捗バーを隠す
       _sendingRequested = false; // 進捗要求をクリア
-      progressPercent = 0.0; // パーセントもリセットF
+      progressPercent = 0.0; // パーセントもリセット
       isConnecting = false;
     });
     callSdkMessage(data);
   }
+
+  Future<void> _handleSendImageToDeviceComplete(
+      Map<String, dynamic> data) async {
+    if (_currentModeIsWifi) return;
+    progressPercent = 0.0;
+    setState(() {
+      isSending = false;
+    });
+  }
+
+  Future<void> _handleSendImageToDeviceFailed(Map<String, dynamic> data) async {
+    if (_currentModeIsWifi) return;
+    progressPercent = 0.0;
+    setState(() {
+      isSending = false;
+      _sendingRequested = false;
+    });
+    callSdkMessage(data);
+  }
+
 
   Future<void> _handleBLEDeviceDisconnect(Map<String, dynamic> data) async {
     connectionState = "disconnect";
@@ -320,21 +400,21 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     callSdkMessage(data);
   }
 
-  Future<void> _handleSendImageToDeviceComplete(
-      Map<String, dynamic> data) async {
-    progressPercent = 0.0;
-    setState(() {
-      isSending = false;
-    });
-  }
-
-  Future<void> _handleSendImageToDeviceFailed(Map<String, dynamic> data) async {
-    progressPercent = 0.0;
-    setState(() {
-      isSending = false;
-    });
-    callSdkMessage(data);
-  }
+  // Future<void> _handleSendImageToDeviceComplete(
+  //     Map<String, dynamic> data) async {
+  //   progressPercent = 0.0;
+  //   setState(() {
+  //     isSending = false;
+  //   });
+  // }
+  //
+  // Future<void> _handleSendImageToDeviceFailed(Map<String, dynamic> data) async {
+  //   progressPercent = 0.0;
+  //   setState(() {
+  //     isSending = false;
+  //   });
+  //   callSdkMessage(data);
+  // }
 
   Future<void> _handleSendImageToDeviceProgress(
       Map<String, dynamic> data) async {
@@ -701,9 +781,13 @@ class _SendPictureSelect extends State<SendPictureSelect> {
           ),
 
       if (uiBlocked)
-        const Positioned.fill(
-          child: ModalBarrier(color: Colors.black54, dismissible: false),
-        ),
+        if (uiBlocked)
+          const Positioned.fill(
+            child: ModalBarrier(
+              color: Colors.black54,
+              dismissible: false,
+            ),
+          ),
 
 // スピナー（接続中のみ）
       if (isConnecting)
@@ -718,18 +802,8 @@ class _SendPictureSelect extends State<SendPictureSelect> {
             ),
           ),
         ),
-      // if (isConnected)
-      // if (isSending)
-      // if (isConnecting || isSending)
-      //   const Positioned.fill(
-      //       child: ModalBarrier(
-      //         color: Colors.black54,
-      //         dismissible: false, // ユーザー操作をブロック
-      //       )),
-      // if (isConnected && !isSending)
-      //   Center(child: AppTheme.customCircularProgressIndicator()),
-      // 横長プログレス — スピナー中は絶対に出さない
-      if (!isConnecting && isConnected && isSending)
+
+      if (!isConnecting && isSending && (isWifiMode || isConnected))
         Center(
           child: Container(
             width: 300,
@@ -1012,13 +1086,10 @@ class _SendPictureSelect extends State<SendPictureSelect> {
     // まず Map から変数に代入
     final callbackName = data['callbackName'] as String?;
     final message = data['message'] as String?;
-
-    // 状態更新
     setState(() {
-      resultTitle = callbackName ?? "Unknown";
-      resultContext = callbackName == "onSendImageToDeviceFailed"
-          ? "e-paperに配信できませんでした"
-          : (message ?? "");
+      resultTitle = callbackName ?? "通知";
+      // message があればそれを優先して表示
+      resultContext = message ?? (callbackName == "onSendImageToDeviceFailed" ? "電子ペーパーに配信できませんでした" : "");
     });
     showDialog(
         barrierDismissible: false,
@@ -1057,355 +1128,284 @@ class _SendPictureSelect extends State<SendPictureSelect> {
   // BLE デバイスへの接続開始
   //デバイスが提供する state / connectionState の Stream を監視できる
   //イベントを受け取るまで待機するように修正
-  Future<bool> waitForDeviceConnected(dynamic trust,
-      {Duration timeout = const Duration(seconds: 4)}) async {
-    // final start = DateTime.now().millisecondsSinceEpoch;
-    // debugPrint('[TIME][connect] connect() begin: ${_ts()}');
+  // ---------- 接続待ち（簡潔版） ----------
+  Future<bool> waitForDeviceConnected(dynamic device, {Duration timeout = const Duration(seconds: 4)}) async {
     try {
-      //デバイスへの接続をリクエスト
-      await trust.connect(autoConnect: false);
-    } catch (e) {
-      // debugPrint('[TIME][connect] connect() threw immediately: $e');
-    }
+      // connect を呼ぶが、既に接続済でも例外にならないようにラップ
+      await device.connect(autoConnect: false).catchError((_) {});
+    } catch (_) {}
 
     try {
-      //dynamicとして扱えるか確認+接続状態を通知するStreamかどうか
-      if (trust is dynamic && trust.state is Stream) {
-        //　状態の方を確認
-        final s = await trust.state
-            //接続を完全待ち
-            .firstWhere((s) => s.toString().toLowerCase().contains('connected'))
-            .timeout(timeout);
-        // final end = DateTime.now().millisecondsSinceEpoch;
-        // debugPrint('[TIME][connect] connected event received: ${_ts()} (elapsed ${end - start} ms)');
-        return true;
-
-        //　Stream の提供方法が異なる場合
-        //　すべての BLE デバイスが同じ API を提供するわけではない
-      } else if (trust is dynamic && trust.connectionState is Stream) {
-        final s = await trust.connectionState
-            //接続を完全待ち
-            .firstWhere((s) => s.toString().toLowerCase().contains('connected'))
-            .timeout(timeout);
-        // final end = DateTime.now().millisecondsSinceEpoch;
-        // debugPrint('[TIME][connect] connected event received (connectionState): ${_ts()} (elapsed ${end - start} ms)');
-        return true;
-
-        //　Streamなし
-      } else {
-        // debugPrint('[TIME][connect] no state stream; waiting timeout (${timeout.inSeconds}s)');
-        await Future.delayed(timeout);
-        // final end = DateTime.now().millisecondsSinceEpoch;
-        // debugPrint('[TIME][connect] fallback wait done: ${_ts()} (elapsed ${end - start} ms)');
-        return false;
-      }
-
-      //制御（Stream はあるけど、指定時間内に接続成功の通知が来なかったら例外を投げて制御）
-      //接続不可
+      // 多くのBLEパッケージは `state` か `connectionState` を Stream として提供する
+      final Stream stateStream = (device.state is Stream) ? device.state : (device.connectionState is Stream ? device.connectionState : Stream.value(null));
+      await stateStream.firstWhere((s) => s != null && s.toString().toLowerCase().contains('connected')).timeout(timeout);
+      return true;
     } on TimeoutException {
-      // final end = DateTime.now().millisecondsSinceEpoch;
-      // debugPrint('[TIME][connect] timed out after ${timeout.inSeconds}s: ${_ts()} (elapsed ${end - start} ms)');
-      //　falseを返すことで、スローすることが可能。後でレスポンスが返ってきたりするのを制御する
       return false;
-
-      //例外
     } catch (e, st) {
-      // final end = DateTime.now().millisecondsSinceEpoch;
-      // debugPrint('[TIME][connect] error while waiting for state: $e (${end - start} ms)');
-      debugPrint(st.toString());
-
+      debugPrint('waitForDeviceConnected error: $e\n$st');
       return false;
     }
   }
 
-  // 接続（サービスUUIDとキャラUUIDを取得）
-  // 相手が応答しない場合に ずっと待ち続けてアプリがフリーズするためタイムアウトは必要
-  Future<BluetoothCharacteristic> getCharacteristicWithRetry({
-    required dynamic trust,
+// サービス・キャラ取得（リトライ回数制限）
+  Future<Map<String, BluetoothCharacteristic>> getCharacteristicsWithRetry({
+    required dynamic device,
     required Guid serviceUUID,
-    required Guid charUUID,
+    required Guid writeUUID,
+    required Guid notifyUUID,
+    int maxAttempts = 2,
   }) async {
-    //リトライ処理
     int attempt = 0;
-
-    //抜ける前提のループ（リトライ）
     while (true) {
-      // final attemptStart = DateTime.now().millisecondsSinceEpoch;
-      // debugPrint('[TIME][discover] attempt ${attempt + 1} start: ${_ts()}');
-
       try {
-        // ここは既に 3秒でタイムアウトさせる
-        final services =
-            await trust.discoverServices().timeout(Duration(seconds: 3));
-        // final attemptEnd = DateTime.now().millisecondsSinceEpoch;
-        // debugPrint('[TIME][discover] attempt ${attempt + 1} success: ${_ts()} (elapsed ${attemptEnd - attemptStart} ms)');
-
-        //　最初に条件を満たす
-        // サービスUUIDを探す　無ければ例外を投げる
-        final service = services.firstWhere(
-          (s) => s.uuid == serviceUUID,
-          orElse: () => throw Exception('サービスUUIDが見つかりません'),
-        );
-        //　目的のキャラクタリスティックUUIDを探す　無ければ例外を投げる
-        final char = service.characteristics.firstWhere(
-          (c) => c.uuid == charUUID,
-          orElse: () => throw Exception('キャラクタリスティックが見つかりません'),
-        );
-        return char;
-
-        //失敗した際のダイアログ表示
+        final services = await device.discoverServices().timeout(const Duration(seconds: 3));
+        final service = services.firstWhere((s) =>
+        s.uuid == serviceUUID, orElse: () => throw Exception('サービスUUIDが見つかりません'));
+        final writeChar = service.characteristics.firstWhere((c) =>
+        c.uuid == writeUUID, orElse: () => throw Exception('write キャラクタリスティックが見つかりません'));
+        final notifyChar = service.characteristics.firstWhere((c) =>
+        c.uuid == notifyUUID, orElse: () => throw Exception('notify キャラクタリスティックが見つかりません'));
+        return {'write': writeChar, 'notify': notifyChar};
       } catch (e, st) {
-        // final attemptEnd = DateTime.now().millisecondsSinceEpoch;
-        // debugPrint('[TIME][discover] attempt ${attempt + 1} failed: ${_ts()} (elapsed ${attemptEnd - attemptStart} ms) error: $e');
-        debugPrint(st.toString());
-        //　2回目（0回、1回）で終了する
-        if (attempt >= 1) {
-          rethrow;
-        }
-        attempt++; //　回数カウント
-        //　再試行
+        debugPrint('getChars attempt $attempt failed: $e\n$st');
+        attempt++;
+        if (attempt >= maxAttempts) rethrow;
         await Future.delayed(const Duration(milliseconds: 200));
       }
     }
   }
 
-// sendImagePictureBle（計測は後程消す）
+
   Future<void> sendImagePictureBle(String url) async {
+    // BLEモード明示
+    _currentModeIsWifi = false;
+
     if (widget.trustDevice == null) return;
-    final trust = widget.trustDevice!;
-    bool didConnectHere = false; //接続状態があるかないか
+    final device = widget.trustDevice!;
+    StreamSubscription<List<int>>? notifySub;
+    BluetoothCharacteristic? writeChar;
+    BluetoothCharacteristic? notifyChar;
+    bool didConnectHere = false;
+
+    const defaultChunk = 180; // MTU 未取得時の安全値
+    int chunkSize = defaultChunk;
 
     try {
-      final file = await (widget.cacheManager ?? DefaultCacheManager())
-          .getSingleFile(url)
-          .timeout(const Duration(seconds: 3));
+      // 画像取得
+      final file = await (widget.cacheManager ?? DefaultCacheManager()).getSingleFile(url).timeout(const Duration(seconds: 3));
+      final payload = await file.readAsBytes();
+      if (payload.isEmpty) throw Exception('画像データが空です');
 
-      final imageBytes = await file.readAsBytes();
+      // 接続開始
+      if (mounted) setState(() {
+        _lockUI = true;
+        isConnecting = true;
+        isSending = false;
+        progressPercent = 0.0;
+      });
 
-      if (imageBytes.isEmpty) throw Exception('画像データが空です。');
-
-      final payload = imageBytes;
-
-      // 接続開始前：ここでスピナーを出す（ファイル取得後に出すのが自然）
-      if (mounted) {
-        setState(() {
-          _lockUI = true;
-          isConnecting = true; // ぐるぐるインジケータを表示
-          isSending = false; // 送信バーはまだ出さない
+      //  接続待ち
+      final connected = await waitForDeviceConnected(device, timeout: const Duration(seconds: 5));
+      if (!connected) {
+        if (mounted) setState(() {
+          isConnecting = false;
+          isConnected = false;
+          isSending = false;
           progressPercent = 0.0;
         });
-      }
-
-      //　ここで関数へ移動し接続を行う
-      final connected =
-          await waitForDeviceConnected(trust, timeout: Duration(seconds: 5));
-
-      // 接続待ち終了（成功/失敗どちらでも UI を変える）
-      if (mounted) {
-        setState(() {
-          isConnecting = false; // スピナーは消す（見た目）
-          // ただし _lockUI はまだ true のまま（内部的にはブロック継続）
-          isConnected = true;
-          isConnecting = false; // ぐるぐるを消す
-        });
-      }
-
-      if (!connected) {
-        debugPrint(
-            '[エラー] connect failed: timed out waiting for connected state');
-        if (mounted) {
-          setState(() {
-            isSending = false;
-            isConnected = false;
-            _sendingRequested = false;
-            progressPercent = 0.0;
-          });
-        }
-        await _showBleErrorAfterState(
-            '接続エラー', 'BLEデバイスに接続できませんでした。\n再度お試しください。');
-        return; //遅れてイベントが来ても送信処理を進めないようにする制御
-      }
-
-      // 接続成功：送信フェーズへ切り替え（ここで一度に切り替える）
-      didConnectHere = true;
-      if (mounted) {
-        setState(() {
-          _sendingRequested = true;
-          isSending = true;
-          _lockUI = false;
-          // isConnecting = false;    // スピナー隠し
-          // isConnected = true;      // デバイス接続状態フラグ
-          // progressPercent = 0.0;   // 進捗リセット
-          // isSending はすぐに true にしない（フラッシュ防止のため）
-        });
-      }
-
-      try {
-        //　MTU (Maximum Transmission Unit) を測定・リクエスト
-        await trust.requestMtu(185).timeout(Duration(seconds: 2));
-      } catch (e) {}
-
-      late BluetoothCharacteristic char;
-      try {
-        //　サービス・キャラクタリスティックの取得
-        char = await getCharacteristicWithRetry(
-            trust: trust, serviceUUID: service_UUID, charUUID: char_UUID);
-
-        // characteristic 取得成功 -> ここでやっと「送信表示を要求」する
-        _sendingRequested = true;
-        // 少しデバウンスしてから実際に isSending=true にする（短い遅延）
-        Future.delayed(const Duration(milliseconds: 100), () {
-          if (!mounted) return;
-          if (_sendingRequested && isConnected) {
-            setState(() {
-              _sendingRequested = true;
-              isSending = true; // 横長バーを直ちに表示（ModalBarrier は継続）
-              _lockUI = false; // トランジションロック解除（ただし isSendingによりブロックは継続）
-            });
-          }
-        });
-      } on Exception catch (e, st) {
-        debugPrint(st.toString());
-
-        if (mounted)
-          setState(() {
-            isSending = false;
-            isConnected = false;
-            _sendingRequested = false;
-            progressPercent = 0.0;
-          });
-        await _showBleErrorAfterState(
-            '取得失敗エラー', 'UUIDの取得に失敗しました。\n接続先を確認してください。');
+        await _showBleErrorAfterState('接続エラー', 'BLEデバイスに接続できませんでした。');
         return;
       }
+      didConnectHere = true;
+      if (mounted) setState(() {
+        isConnecting = false;
+        isConnected = true;
+        _sendingRequested = true;
+        isSending = true;
+        _lockUI = false;
+      });
 
-      // 送信ループ
-      //　writesの情報を下記へ保存
-      final writes = <Map<String, dynamic>>[];
+      //  MTUリクエスト（できれば行い、chunk を決める）
+      int mtuValue = 185;
+      try {
+        final mtuResp = await device.requestMtu(185).timeout(const Duration(seconds: 2));
+        if (mtuResp is int) mtuValue = mtuResp;
+        else mtuValue = int.tryParse(mtuResp.toString()) ?? mtuValue;
+      } catch (_) {
+        mtuValue = 185;
+      }
 
-      //　データを chunkSize ごとに分割して送信
-      for (int offset = 0; offset < payload.length; offset += chunkSize) {
-        final int end = (offset + chunkSize < payload.length)
-            ? offset + chunkSize
-            : payload.length;
-        final chunk = payload.sublist(offset, end);
+      // 実際に安全な chunkSize を決定（MTU-3 と 512 の小さい方）
+      chunkSize = math.min(mtuValue - 3, 512);
+      // 安全マージン（少し小さくしておく）
+      chunkSize = math.max(64, chunkSize - 2);
+      debugPrint('[BLE] MTU=$mtuValue => initial chunkSize=$chunkSize');
 
-        int writeAttempt = 0;
+      //  キャラクタリスティック取得
+      final chars = await getCharacteristicsWithRetry(
+        device: device,
+        serviceUUID: service_UUID,
+        writeUUID: char_UUID,
+        notifyUUID: statusCharUUID,
+      );
+      writeChar = chars['write']!;
+      notifyChar = chars['notify']!;
+
+      // notify 有効化 & サブスクライブ
+      await notifyChar.setNotifyValue(true);
+
+      notifySub = notifyChar.value.listen((bytes) {
+        try {
+          debugPrint('BLE notify bytes len=${bytes.length}');
+          final msg = utf8.decode(bytes, allowMalformed: true);
+          debugPrint('BLE notify decoded: $msg');
+          try { jsonDecode(msg); handleReceivedMessage(msg); } catch (_) { /* 非JSONは無視 */ }
+        } catch (e, st) {
+          debugPrint('notify parse error: $e\n$st');
+        }
+      });
+
+      // READY を送る（Python側が READY を期待しているので）
+      try {
+        await writeChar.write(utf8.encode('READY'), withoutResponse: true).timeout(const Duration(seconds: 2));
+      } catch (_) { /* ignore */ }
+
+      // 8) データ送信（チャンク分割） -- 自動調整＆フォールバックあり
+      int offset = 0;
+      int totalSent = 0;
+
+      while (offset < payload.length) {
+        final end = math.min(offset + chunkSize, payload.length);
+        List<int> chunk = payload.sublist(offset, end);
+
         bool wrote = false;
+        int writeAttempt = 0;
 
-        // 成功まで0-1回　リトライ
         while (!wrote) {
           try {
-            //　個別チャンクの書き込み
-            await char
-                .write(chunk, withoutResponse: true)
-                .timeout(Duration(seconds: 2));
-            totalSentBytes += chunk.length;
+            await writeChar.write(chunk, withoutResponse: true).timeout(const Duration(seconds: 2));
             wrote = true;
-
-            //タイムアウト後の処理を無効化しているので制御が効く
-          } on TimeoutException catch (te) {
-            if (writeAttempt >= 1) {
-              if (mounted)
-                setState(() {
-                  isSending = false;
-                  isConnected = false;
-                  _readyToSend = false;
-                  progressPercent = 0.0;
-                  _sendingRequested = false;
-                });
-              await _showBleErrorAfterState('送信タイムアウト', '書き込みタイムアウトが発生しました。');
-              return;
+            totalSent += chunk.length;
+            offset = end; // 成功したら進める
+          } on PlatformException catch (e) {
+            final msg = e.message?.toString() ?? '';
+            debugPrint('[BLE] PlatformException while writing: $msg');
+            // 例外メッセージから max 値が取れるか試す
+            final m = RegExp(r'max:\s*(\d+)').firstMatch(msg);
+            if (m != null) {
+              final parsedMax = int.tryParse(m.group(1)!) ?? chunkSize;
+              int newChunk = parsedMax - 2;
+              if (newChunk < 20) {
+                throw Exception('チャンクサイズが小さすぎます: $newChunk');
+              }
+              debugPrint('[BLE] Adjust chunkSize from $chunkSize -> $newChunk based on PlatformException max');
+              chunkSize = newChunk;
+            } else {
+              // max が取れなければ縮小して再試行（80%にする）
+              final newChunk = (chunkSize * 0.8).floor();
+              if (newChunk < 20) throw Exception('Unable to determine safe chunk size; reduced too small.');
+              debugPrint('[BLE] Reducing chunkSize fallback: $chunkSize -> $newChunk');
+              chunkSize = newChunk;
             }
+            // 再作成
+            final newEnd = math.min(offset + chunkSize, payload.length);
+            chunk = payload.sublist(offset, newEnd);
 
-            //例外
-          } catch (e, st) {
-            debugPrint(st.toString());
-            if (writeAttempt >= 1) {
-              if (mounted)
-                setState(() {
-                  isSending = false;
-                  isConnected = false;
-                  progressPercent = 0.0;
-                });
-              await _showBleErrorAfterState(
-                  '送信エラー', '画像送信中にエラーが発生しました。\n再接続して再試行してください。');
-              return;
+            writeAttempt++;
+            if (writeAttempt >= 4) {
+              throw Exception('書き込みを複数回試みましたが失敗しました: attempts=$writeAttempt');
             }
-          }
-          writeAttempt++;
-          //　書き込みに失敗
-          if (!wrote)
             await Future.delayed(Duration(milliseconds: 150 * writeAttempt));
-        }
-        if (mounted) setState(() => progressPercent = end / payload.length);
-        await Future.delayed(Duration(milliseconds: 12));
-      }
+          } on TimeoutException {
+            writeAttempt++;
+            if (writeAttempt >= 3) throw Exception('書き込みタイムアウト');
+            await Future.delayed(Duration(milliseconds: 150 * writeAttempt));
+          } catch (e) {
+            writeAttempt++;
+            if (writeAttempt >= 3) rethrow;
+            await Future.delayed(Duration(milliseconds: 150 * writeAttempt));
+          }
+        } // while !wrote
 
-      // UI 更新　一瞬だけUIの状態をユーザーへ見せる
-      if (mounted) {
-        setState(() {
-          progressPercent = 1.0;
-        });
-      }
+        // 軽いインターバル（過負荷対策）
+        await Future.delayed(const Duration(milliseconds: 12));
+        if (mounted) setState(() { progressPercent = offset / payload.length; });
+      } // while offset
+
+      // 最終 UI 更新
+      if (mounted) setState(() => progressPercent = 1.0);
       await Future.delayed(const Duration(milliseconds: 100));
     } catch (e, st) {
-      debugPrint('[ERROR] send exception: $e');
-      debugPrint(st.toString());
-      if (mounted)
-        setState(() {
-          isSending = false;
-          isConnected = false;
-          _sendingRequested = false;
-          _readyToSend = false;
-          progressPercent = 0.0;
-        });
-      await _showBleErrorAfterState(
-          '送信エラー', '画像送信中に例外が発生しました。\n再接続して再試行してください。');
+      debugPrint('[ERROR] sendImagePictureBle: $e\n$st');
+      if (mounted) setState(() {
+        isSending = false;
+        isConnected = false;
+        _sendingRequested = false;
+        progressPercent = 0.0;
+      });
+      await _showBleErrorAfterState('送信エラー', '画像送信中に問題が発生しました。');
       return;
-
-      //　切断する
     } finally {
-      //　送信が終わったら、成功でも失敗でも、BLEを切断して画面を元に戻す
+      // 後片付け
+      try { if (notifyChar != null) await notifyChar.setNotifyValue(false); } catch (_) {}
+      try { await notifySub?.cancel(); } catch (_) {}
       if (didConnectHere) {
-        try {
-          await trust.disconnect();
-        } catch (_) {}
-        //　切断処理が安定するように少し待つ
+        try { await device.disconnect(); } catch (_) {}
         await Future.delayed(const Duration(milliseconds: 100));
       }
-
-      if (mounted)
-        setState(() {
-          isSending = false;
-          isConnected = false;
-          connectionState = 'disconnect';
-          _sendingRequested = false;
-          _readyToSend = false;
-          progressPercent = 0.0;
-        });
-      // debugPrint('[TIME][overall] send finished: ${_ts()}');
+      if (mounted) setState(() {
+        isSending = false;
+        isConnected = false;
+        connectionState = 'disconnect';
+        _sendingRequested = false;
+        _readyToSend = false;
+        progressPercent = 0.0;
+      });
     }
   }
 
-// wifi通信を行う際の処理
+
+  // wifi通信を行う際の処理
+// Wi-Fiで画像を送信するメイン処理
   void sendImagePictureWifi(String imageUrl) async {
     setState(() {
-      isSending = true;
-      progressPercent = 0.0;
+      _lockUI = true;     // UIロック
+      isSending = true;   // 送信中フラグ
+      progressPercent = 0.0; // 進捗初期化
     });
-    _upload(imageUrl).then((_) => _startPolling());
+
+    // Wi-Fi モードと明示
+    _currentModeIsWifi = true;
+    _seenProcessing = false;
+
+    try {
+      await _upload(imageUrl);
+      // upload が終わったらポーリングを開始
+      _startPolling();
+    } catch (e) {
+      debugPrint('[送信エラー] $e');
+      // 失敗時はフラグを戻す
+      _currentModeIsWifi = false;
+      _seenProcessing = false;
+      if (mounted) {
+        setState(() {
+          isSending = false;
+          _lockUI = false;
+          progressPercent = 0.0;
+        });
+      }
+    }
   }
 
-  // 画像のアップロードだけを担当
+// 画像のアップロードだけを担当
   Future<void> _upload(String imageUrl) async {
     final dio = Dio();
     final file = await (widget.cacheManager ?? DefaultCacheManager())
         .getSingleFile(imageUrl);
     final bytes = await file.readAsBytes();
-    print('[デバック] Wi-Fiアップロード開始: ${file.path}');
+    print('[デバッグ] Wi-Fiアップロード開始: ${file.path}');
 
-    // IPアドレスからURLを動的に組み立てる
     final serverUrl = "http://${widget.ipAddress}:5000/upload";
     final form = FormData.fromMap({
       'image': MultipartFile.fromBytes(
@@ -1415,64 +1415,165 @@ class _SendPictureSelect extends State<SendPictureSelect> {
       ),
     });
 
-    //　完了を待つ
     await dio.post(
       serverUrl,
       data: form,
       onSendProgress: (sent, total) {
-        setState(() {
-          progressPercent = total > 0 ? (sent / total) * 0.9 : 0.0;
-        });
+        if (mounted) {
+          setState(() {
+            // アップロード中はバーを 0 → 0.9
+            progressPercent = total > 0 ? (sent / total) * 0.9 : 0.0;
+          });
+        }
       },
     );
   }
 
-  // 完了ステータスのポーリングだけを担当
-  void _startPolling() {
-    //Timer.periodic(Duration(seconds: 1), (timer) async {
-    Timer.periodic(Duration(milliseconds: 100), (timer) async {
-      try {
-        //　返答待ち
-        //final resp = await Dio().get('http://192.168.200.58:5000/status');
-        final ip = widget.ipAddress ?? '192.168.200.58';
-        // widget.ipAddress ?? '192.168.200.45';
-        final statusUrl = 'http://$ip:5000/status';
+// サーバーステータスをポーリングして描画完了までバーを維持
+  void _startPolling({Duration pollInterval = const Duration(milliseconds: 300)}) {
+    // 既に動いているポーリングがあれば止める
+    _wifiPollingTimer?.cancel();
 
+    int consecutiveErrors = 0;
+    const int maxConsecutiveErrors = 8; // 調整可（8*300ms ≒ 2.4秒）
+    final ip = widget.ipAddress ?? '192.168.200.58';
+    final statusUrl = 'http://$ip:5000/status';
+
+    _wifiPollingTimer = Timer.periodic(pollInterval, (timer) async {
+      try {
         final resp = await Dio().get(statusUrl);
-        final data = resp.data as Map<String, dynamic>;
-        // statusでserverの現状態を取り出す
-        final status = data['status'] as String;
-        final elapsed = (data['elapsed_time'] ?? 0.0) as double;
-        print('[デバック] サーバーステータス: $status, elapsed: $elapsed');
-        if (status == 'done' || status == 'error') {
-          timer.cancel();
-          _onDisplayDone(elapsed);
+        final data = resp.data as Map<String, dynamic>? ?? {};
+        final rawStatus = data['status'];
+        final status = rawStatus is String ? rawStatus.toLowerCase() : null;
+
+        consecutiveErrors = 0;
+
+        if (!mounted) return;
+
+        // processing を一度でも見たらフラグを立てる
+        if (status == 'processing' || status == 'rendering' || status == 'working') {
+          _seenProcessing = true;
         }
-      } catch (e, stack) {
-        //　ここで進捗インジケータを非表示
-        timer.cancel();
-        setState(() => isSending = false);
-        debugPrint('[エラー] 送信中に例外発生: $e');
-        debugPrint(stack.toString());
+
+        // 描画中や upload 後は最低 0.9 を維持する
+        if (mounted && isSending && _currentModeIsWifi) {
+          setState(() {
+            final current = progressPercent ?? 0.0;
+            progressPercent = math.max(current, 0.9);
+          });
+        }
+
+        if (status == 'done') {
+          timer.cancel();
+          _wifiPollingTimer = null;
+          _seenProcessing = false;
+          _currentModeIsWifi = false;
+          _onDisplayDone();
+          return;
+        }
+
+        if (status == 'error') {
+          timer.cancel();
+          _wifiPollingTimer = null;
+          _seenProcessing = false;
+          _currentModeIsWifi = false;
+          _handleError(data['last_error']);
+          return;
+        }
+
+        // status が 'idle' 等で過去に processing を見ている場合は待つ（何もしない）
+        if (status == 'idle' && _seenProcessing) {
+          return;
+        }
+
+        // 未知の status も無視して待つ
+        return;
+      } catch (e) {
+        consecutiveErrors += 1;
+        debugPrint('[polling] network error ($consecutiveErrors): $e');
+
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          debugPrint('[polling] too many consecutive errors -> canceling polling');
+          _wifiPollingTimer?.cancel();
+          _wifiPollingTimer = null;
+          if (mounted) {
+            setState(() {
+              isSending = false;
+              _lockUI = false;
+              progressPercent = 1.0; // 安全にフル表示にしておく
+              _currentModeIsWifi = false;
+              _seenProcessing = false;
+            });
+          }
+        }
+        // それ以外は再試行を待つ
       }
     });
   }
 
-  // 描画プログレスと最終クリアを担当
-  void _onDisplayDone(double elapsedSec) {
-    // ① まず即座にバーを100%に
-    setState(() {
-      progressPercent = 1.0;
-      isSending = false;
-    });
 
-    //　必要ではないかも
-    // Future.delayed(Duration(milliseconds: 10), () {
-    //   setState(() {
-    //     isSending = false;
-    //   });
-    // });
+
+// 描画完了時にバーを 1.0 にして UIロック解除
+  void _onDisplayDone() {
+    progressPercent = 1.0; // ← このタイミングで初めて100%
+    isSending = false;     // ← UI解放
+    _lockUI = false;
+
+    if (mounted) {
+      setState(() {
+        progressPercent = 1.0;
+        isSending = false;
+        _lockUI = false;
+      });
+    }
   }
+
+// エラー処理を共通化
+  void _handleError(dynamic lastErrorRaw) {
+    // メッセージ組み立て
+    String msg;
+    Map<String, dynamic> payload;
+
+    if (lastErrorRaw is Map<String, dynamic>) {
+      msg = lastErrorRaw['message'] ?? '電子ペーパーに配信できませんでした';
+      payload = {
+        'callbackName': 'onSendImageToDeviceFailed',
+        'message': msg,
+        'last_error': lastErrorRaw,
+      };
+    } else if (lastErrorRaw is String) {
+      msg = lastErrorRaw;
+      payload = {
+        'callbackName': 'onSendImageToDeviceFailed',
+        'message': msg,
+      };
+    } else {
+      msg = '電子ペーパーに配信できませんでした';
+      payload = {
+        'callbackName': 'onSendImageToDeviceFailed',
+        'message': msg,
+      };
+    }
+
+    // UIリセット
+    if (mounted) {
+      setState(() {
+        isSending = false;
+        _lockUI = false;
+        progressPercent = 0.0;
+      });
+    }
+
+    callSdkMessage(payload);
+
+
+    // 最後に
+    _wifiPollingTimer?.cancel();
+    _wifiPollingTimer = null;
+    _currentModeIsWifi = false;
+    _seenProcessing = false;
+  }
+
 
   // wifiかBLEか
   void sendImageType(String imageUrl) {
